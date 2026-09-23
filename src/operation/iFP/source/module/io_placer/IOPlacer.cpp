@@ -108,6 +108,7 @@ void IOPlacer::place()
   Monitor monitor;
   FPLOG.info(Loc::current(), "Starting...");
 
+  buildNetIOPinIndex();
   resetIOPinPlacement();
   placeIOPin();
 
@@ -119,6 +120,7 @@ void IOPlacer::placeAuto()
   Monitor monitor;
   FPLOG.info(Loc::current(), "Starting...");
 
+  buildNetIOPinIndex();
   resetIOPinPlacement();
   Config& config = FPDM.getConfig();
   if (!config.io_pin_layer_name_list.empty()) {
@@ -615,15 +617,27 @@ void IOPlacer::syncPinLocation(IOPin& io_pin, IOPort& io_port, int32_t x, int32_
   io_pin.set_orient(PlacementOrientation::kN);
 }
 
-void IOPlacer::updateNetIOPin(IOPin& io_pin)
+void IOPlacer::buildNetIOPinIndex()
 {
+  _io_pin_to_net_pin_map.clear();
   for (Net& net : FPDM.getDatabase().get_net_list()) {
     for (NetPin& net_pin : net.get_net_pin_list()) {
-      if (net_pin.get_io() && net_pin.get_pin_name() == io_pin.get_name()) {
-        net_pin.set_coord(io_pin.get_x(), io_pin.get_y());
-        net_pin.set_placed(io_pin.get_placed());
+      if (net_pin.get_io()) {
+        _io_pin_to_net_pin_map[net_pin.get_pin_name()].push_back(&net_pin);
       }
     }
+  }
+}
+
+void IOPlacer::updateNetIOPin(IOPin& io_pin)
+{
+  auto iter = _io_pin_to_net_pin_map.find(io_pin.get_name());
+  if (iter == _io_pin_to_net_pin_map.end()) {
+    return;
+  }
+  for (NetPin* net_pin : iter->second) {
+    net_pin->set_coord(io_pin.get_x(), io_pin.get_y());
+    net_pin->set_placed(io_pin.get_placed());
   }
 }
 

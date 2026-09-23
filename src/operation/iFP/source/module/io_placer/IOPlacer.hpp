@@ -19,7 +19,10 @@
 #include "Core.hpp"
 #include "IOEdgeType.hpp"
 #include "IOPin.hpp"
+#include "NetPin.hpp"
 #include "RoutingLayer.hpp"
+
+#include <unordered_map>
 
 namespace ifp {
 
@@ -61,7 +64,10 @@ class IOPlacer
                         int32_t pin_idx, int32_t track_offset, int32_t track_pitch);
   void addIOPinPort(IOPin& io_pin, IOEdgeType edge_type, int32_t x, int32_t y, int32_t width, int32_t depth, std::string layer_name);
   void syncPinLocation(IOPin& io_pin, IOPort& io_port, int32_t x, int32_t y);
+  void buildNetIOPinIndex();
   void updateNetIOPin(IOPin& io_pin);
+
+  std::unordered_map<std::string, std::vector<NetPin*>> _io_pin_to_net_pin_map;
 };
 
 }  // namespace ifp
