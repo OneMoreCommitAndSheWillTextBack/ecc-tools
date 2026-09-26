@@ -307,7 +307,7 @@ def harden(manifest: dict[str, Any]) -> dict[str, Path]:
     extracted_lib = sta_dir / "timing_characterizer" / "gcd_max.lib"
     _require_file(extracted_lib)
     shutil.copyfile(extracted_lib, hardened_lib)
-    _require(ecc_py.gds_save(str(hardened_gds), True), "gds_save")
+    _require(ecc_py.gds_save(str(hardened_gds)), "gds_save")
     for path in (abstract_lef, hardened_gds, hardened_lib):
         _require_file(path)
     return {"gds": hardened_gds, "lef": abstract_lef, "lib": hardened_lib}

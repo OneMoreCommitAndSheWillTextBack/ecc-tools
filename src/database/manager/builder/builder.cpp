@@ -416,7 +416,7 @@ void IdbBuilder::saveVerilog(std::string verilog_file_name, std::set<std::string
   writer.writeModule();
 }
 
-bool IdbBuilder::saveGDSII(string file, bool is_hardened /* = false */, string layer_map_path /* = "" */)
+bool IdbBuilder::saveGDSII(string file, string layer_map_path /* = "" */)
 {
   if (layer_map_path.empty()) {
     ECCLOG.error(ecc::Loc::current(), "gds_save requires -layer_map <path>.");

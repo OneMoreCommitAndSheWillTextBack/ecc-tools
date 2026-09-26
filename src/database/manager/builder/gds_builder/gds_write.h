@@ -23,7 +23,6 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "../def_service/def_service.h"
@@ -79,9 +78,6 @@ class Def2GdsWrite
   float time_eclips() { return (float(_end_time - _start_time)) / CLOCKS_PER_MS; }
 
   bool writeDb(const char* file, const char* layer_map_path = nullptr);
-  bool writeHardenedDb(const char* file, const char* layer_map_path = nullptr);
-  int32_t write_harden_macro_pins();
-  int32_t write_harden_macro_obs();
   bool writeChip();
 
  private:
@@ -107,8 +103,6 @@ class Def2GdsWrite
   string sanitizeCellName(const string& name);
   bool createTopCell();
   bool finishWrite(const char* file);
-
-  std::pair<int32_t, int32_t> get_pdn_layer_order_range();
 
   int32_t _unit_microns = -1;
   double transDB2Unit(int32_t value) const { return _unit_microns > 0 ? static_cast<double>(value) / _unit_microns : value; }
