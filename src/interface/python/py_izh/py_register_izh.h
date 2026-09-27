@@ -28,6 +28,7 @@ void register_izh(py::module& m)
   m.def("insert_filler", insert_filler, py::arg("config") = "");
   m.def("insert_metal", insert_metal, py::arg("config") = "");
   m.def("check_antenna", check_antenna, py::arg("config") = "", py::arg("report_dir") = "");
+  m.def("def_flatten", def_flatten, py::arg("config") = "");
 }
 
 }  // namespace python_interface

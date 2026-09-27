@@ -37,6 +37,22 @@ bool initAntennaConfigMapByJSON(const std::string& config, std::map<std::string,
   return true;
 }
 
+bool initDefFlattenConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map)
+{
+  std::ifstream config_file(config);
+  if (!config_file.is_open()) {
+    return false;
+  }
+
+  nlohmann::json json;
+  config_file >> json;
+  std::string value = ecc::getJsonData(json, {"ZH", "-hierarchy"});
+  if (!value.empty()) {
+    config_map["-hierarchy"] = value;
+  }
+  return true;
+}
+
 bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map)
 {
   auto config_file = std::ifstream(config);

@@ -27,6 +27,7 @@ int registerCmdZH()
   registerTclCmd(TclZHInsertFiller, "insert_filler");
   registerTclCmd(TclZHCheckAntenna, "check_antenna");
   registerTclCmd(TclZHInsertMetal, "insert_metal");
+  registerTclCmd(TclZHDefFlatten, "def_flatten");
   return EXIT_SUCCESS;
 }
 

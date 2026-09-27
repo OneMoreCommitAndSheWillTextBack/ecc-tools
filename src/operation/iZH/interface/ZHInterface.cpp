@@ -17,6 +17,7 @@
 #include "ZHInterface.hpp"
 
 #include "AntennaChecker.hpp"
+#include "DefFlattener.hpp"
 #include "FillerInserter.hpp"
 #include "MetalInserter.hpp"
 
@@ -55,6 +56,13 @@ void ZHInterface::checkAntenna(std::map<std::string, std::any> config_map)
   AntennaChecker::initInst();
   ZHAC.check(config_map);
   AntennaChecker::destroyInst();
+}
+
+void ZHInterface::flattenDef(std::map<std::string, std::any> config_map)
+{
+  DefFlattener::initInst();
+  ZHDF.flatten(config_map);
+  DefFlattener::destroyInst();
 }
 
 #endif

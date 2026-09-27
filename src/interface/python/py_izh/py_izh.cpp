@@ -23,6 +23,7 @@
 namespace python_interface {
 
 bool initAntennaConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+bool initDefFlattenConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
 bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
 bool initMetalConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
 
@@ -67,6 +68,19 @@ bool check_antenna(const std::string& config, const std::string& report_dir)
 
   ZHI.checkAntenna(config_map);
 
+  return true;
+}
+
+bool def_flatten(const std::string& config)
+{
+  std::map<std::string, std::any> config_map;
+
+  bool pass = config.empty() ? true : initDefFlattenConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
+  }
+
+  ZHI.flattenDef(config_map);
   return true;
 }
 

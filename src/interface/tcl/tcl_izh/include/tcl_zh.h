@@ -64,6 +64,20 @@ class TclZHInsertMetal : public TclCmd
   std::vector<std::pair<std::string, ValueType>> _config_list;
 };
 
+class TclZHDefFlatten : public TclCmd
+{
+ public:
+  explicit TclZHDefFlatten(const char* cmd_name);
+  ~TclZHDefFlatten() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
 #endif
 
 }  // namespace tcl

@@ -10,19 +10,30 @@
 //
 // THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-//
+// MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
-#pragma once
+#include "ZHInterface.hpp"
+#include "tcl_util.h"
+#include "tcl_zh.h"
 
-#include <tcl_util.h>
+namespace tcl {
 
-namespace python_interface {
+TclZHDefFlatten::TclZHDefFlatten(const char* cmd_name) : TclCmd(cmd_name)
+{
+  _config_list.push_back(std::make_pair("-hierarchy", ValueType::kString));
 
-bool insert_filler(const std::string& config);
-bool insert_metal(const std::string& config);
-bool check_antenna(const std::string& config, const std::string& report_dir);
-bool def_flatten(const std::string& config);
+  TclUtil::addOption(this, _config_list);
+}
 
-}  // namespace python_interface
+unsigned TclZHDefFlatten::exec()
+{
+  if (!check()) {
+    return 0;
+  }
+  std::map<std::string, std::any> config_map = TclUtil::getConfigMap(this, _config_list);
+  ZHI.flattenDef(config_map);
+  return 1;
+}
+
+}  // namespace tcl
