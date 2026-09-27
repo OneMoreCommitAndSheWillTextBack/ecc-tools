@@ -108,6 +108,9 @@ bool DefFlattener::buildDFModel(DFModel& df_model, std::map<std::string, std::an
   if (!buildDFSourceMap(df_model)) {
     return false;
   }
+  if (!buildDFHierarchy(df_model)) {
+    return false;
+  }
   return true;
 }
 
@@ -118,70 +121,26 @@ bool DefFlattener::buildDFConfig(DFModel& df_model, std::map<std::string, std::a
     ZHLOG.error(Loc::current(), "The -hierarchy option is required.");
     return false;
   }
-  std::string* hierarchy_path_ptr = std::any_cast<std::string>(&config_iter->second);
-  if (hierarchy_path_ptr == nullptr || hierarchy_path_ptr->empty()) {
+  std::string* hierarchy_def_path_list_ptr = std::any_cast<std::string>(&config_iter->second);
+  if (hierarchy_def_path_list_ptr == nullptr || hierarchy_def_path_list_ptr->empty()) {
     ZHLOG.error(Loc::current(), "The -hierarchy option is empty.");
     return false;
   }
 
-  std::filesystem::path hierarchy_path = std::filesystem::absolute(*hierarchy_path_ptr).lexically_normal();
-  if (!std::filesystem::exists(hierarchy_path)) {
-    ZHLOG.error(Loc::current(), "Cannot find hierarchy file: ", hierarchy_path.string());
-    return false;
-  }
-
-  std::ifstream hierarchy_stream(hierarchy_path);
-  if (!hierarchy_stream.is_open()) {
-    ZHLOG.error(Loc::current(), "Cannot open hierarchy file: ", hierarchy_path.string());
-    return false;
-  }
-  nlohmann::json hierarchy_json;
-  hierarchy_stream >> hierarchy_json;
-  if (!hierarchy_json.is_object() || !hierarchy_json.contains("children") || !hierarchy_json["children"].is_object()) {
-    ZHLOG.error(Loc::current(), "The hierarchy file must contain an object key named children.");
-    return false;
-  }
-
   DFConfig df_config;
-  df_config.set_hierarchy_path(hierarchy_path.string());
-
-  nlohmann::json& children_json = hierarchy_json["children"];
-  if (children_json.empty()) {
-    ZHLOG.error(Loc::current(), "The hierarchy children object is empty.");
+  std::istringstream hierarchy_def_path_stream(*hierarchy_def_path_list_ptr);
+  std::string hierarchy_def_path;
+  while (hierarchy_def_path_stream >> hierarchy_def_path) {
+    std::filesystem::path def_path = std::filesystem::absolute(hierarchy_def_path).lexically_normal();
+    if (!std::filesystem::exists(def_path)) {
+      ZHLOG.error(Loc::current(), "Cannot find hierarchy DEF file: ", def_path.string());
+      return false;
+    }
+    df_config.get_hierarchy_def_path_list().push_back(def_path.string());
+  }
+  if (df_config.get_hierarchy_def_path_list().empty()) {
+    ZHLOG.error(Loc::current(), "The -hierarchy option must contain at least one DEF path.");
     return false;
-  }
-  for (nlohmann::json::iterator child_iter = children_json.begin(); child_iter != children_json.end(); child_iter++) {
-    if (child_iter.key().empty() || !child_iter.value().is_string() || child_iter.value().get<std::string>().empty()) {
-      ZHLOG.error(Loc::current(), "Each hierarchy child must map a master name to a DEF path.");
-      return false;
-    }
-    std::filesystem::path child_path = child_iter.value().get<std::string>();
-    if (child_path.is_relative()) {
-      child_path = hierarchy_path.parent_path() / child_path;
-    }
-    df_config.get_child_master_to_def_path_map()[child_iter.key()] = std::filesystem::absolute(child_path).lexically_normal().string();
-  }
-
-  if (hierarchy_json.contains("power_map")) {
-    nlohmann::json& power_map_json = hierarchy_json["power_map"];
-    if (!power_map_json.is_object()) {
-      ZHLOG.error(Loc::current(), "The hierarchy power_map value must be an object.");
-      return false;
-    }
-    for (nlohmann::json::iterator power_iter = power_map_json.begin(); power_iter != power_map_json.end(); power_iter++) {
-      if (power_iter.key().empty() || !power_iter.value().is_array()) {
-        ZHLOG.error(Loc::current(), "Each power_map entry must map a net name to a string list.");
-        return false;
-      }
-      df_config.get_power_alias_to_net_name_map()[power_iter.key()] = power_iter.key();
-      for (nlohmann::json::iterator alias_iter = power_iter.value().begin(); alias_iter != power_iter.value().end(); alias_iter++) {
-        if (!alias_iter->is_string() || alias_iter->get<std::string>().empty()) {
-          ZHLOG.error(Loc::current(), "Each power_map alias must be a nonempty string.");
-          return false;
-        }
-        df_config.get_power_alias_to_net_name_map()[alias_iter->get<std::string>()] = power_iter.key();
-      }
-    }
   }
 
   df_model.set_df_config(df_config);
@@ -201,17 +160,12 @@ bool DefFlattener::buildDFSourceMap(DFModel& df_model)
     return false;
   }
 
-  std::map<std::string, std::string>& child_master_to_def_path_map = df_model.get_df_config().get_child_master_to_def_path_map();
-  for (std::pair<const std::string, std::string>& child_pair : child_master_to_def_path_map) {
-    if (!std::filesystem::exists(child_pair.second)) {
-      ZHLOG.error(Loc::current(), "Cannot find child DEF file: ", child_pair.second);
-      return false;
-    }
-
+  std::vector<std::string>& hierarchy_def_path_list = df_model.get_df_config().get_hierarchy_def_path_list();
+  for (std::string& hierarchy_def_path : hierarchy_def_path_list) {
     std::unique_ptr<idb::IdbBuilder> idb_builder = std::make_unique<idb::IdbBuilder>();
     std::vector<std::string> child_lef_file_list = lef_file_list;
-    if (idb_builder->buildLef(child_lef_file_list) == nullptr || idb_builder->buildDef(child_pair.second) == nullptr) {
-      ZHLOG.error(Loc::current(), "Cannot read child DEF file: ", child_pair.second);
+    if (idb_builder->buildLef(child_lef_file_list) == nullptr || idb_builder->buildDef(hierarchy_def_path) == nullptr) {
+      ZHLOG.error(Loc::current(), "Cannot read child DEF file: ", hierarchy_def_path);
       return false;
     }
 
@@ -219,19 +173,109 @@ bool DefFlattener::buildDFSourceMap(DFModel& df_model)
     idb::IdbDesign* child_design = child_def_service == nullptr ? nullptr : child_def_service->get_design();
     idb::IdbLayout* child_layout = child_def_service == nullptr ? nullptr : child_def_service->get_layout();
     if (child_design == nullptr || child_layout == nullptr || child_layout->get_die() == nullptr) {
-      ZHLOG.error(Loc::current(), "The child DEF data is incomplete: ", child_pair.second);
+      ZHLOG.error(Loc::current(), "The child DEF data is incomplete: ", hierarchy_def_path);
+      return false;
+    }
+    std::string master_name = child_design->get_design_name();
+    if (master_name.empty()) {
+      ZHLOG.error(Loc::current(), "The child DEF DESIGN name is empty: ", hierarchy_def_path);
+      return false;
+    }
+    if (df_model.has_df_source(master_name)) {
+      ZHLOG.error(Loc::current(), "Multiple hierarchy DEF files use DESIGN ", master_name, ".");
       return false;
     }
     child_design->materializeAllSpecialNetWildcardPins();
     child_layout->get_die()->set_bounding_box();
 
     DFSource df_source;
-    df_source.set_master_name(child_pair.first);
-    df_source.set_def_path(child_pair.second);
+    df_source.set_master_name(master_name);
+    df_source.set_def_path(hierarchy_def_path);
     df_source.set_die_area(DFDieArea(child_layout->get_die()->get_llx(), child_layout->get_die()->get_lly(),
                                      child_layout->get_die()->get_urx(), child_layout->get_die()->get_ury()));
     df_source.set_idb_builder(std::move(idb_builder));
-    df_model.get_child_master_to_df_source_map().emplace(child_pair.first, std::move(df_source));
+    df_model.get_child_master_to_df_source_map().emplace(master_name, std::move(df_source));
+  }
+  return true;
+}
+
+bool DefFlattener::buildDFHierarchy(DFModel& df_model)
+{
+  idb::IdbDesign* root_design = dmInst->get_idb_design();
+  if (root_design == nullptr || root_design->get_design_name().empty()) {
+    ZHLOG.error(Loc::current(), "The active top DEF design is incomplete.");
+    return false;
+  }
+  if (df_model.has_df_source(root_design->get_design_name())) {
+    ZHLOG.error(Loc::current(), "The top DEF DESIGN cannot also be a hierarchy child: ", root_design->get_design_name());
+    return false;
+  }
+
+  DFHierarchy& df_hierarchy = df_model.get_df_hierarchy();
+  df_hierarchy.set_root_master_name(root_design->get_design_name());
+  std::vector<std::string> master_name_stack;
+  std::set<std::string> visited_master_name_set;
+  if (!buildDFHierarchyNode(df_model, root_design, df_hierarchy.get_root_master_name(), master_name_stack,
+                            visited_master_name_set)) {
+    return false;
+  }
+  for (std::pair<const std::string, DFSource>& source_pair : df_model.get_child_master_to_df_source_map()) {
+    if (visited_master_name_set.find(source_pair.first) == visited_master_name_set.end()) {
+      ZHLOG.error(Loc::current(), "The hierarchy DEF is not reachable from the top DEF: ", source_pair.first);
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DefFlattener::buildDFHierarchyNode(DFModel& df_model, idb::IdbDesign* parent_design, std::string parent_master_name,
+                                        std::vector<std::string>& master_name_stack,
+                                        std::set<std::string>& visited_master_name_set)
+{
+  if (parent_design == nullptr || parent_design->get_instance_list() == nullptr) {
+    ZHLOG.error(Loc::current(), "The hierarchy parent design is incomplete: ", parent_master_name);
+    return false;
+  }
+  for (idb::IdbInstance* source_instance : parent_design->get_instance_list()->get_instance_list()) {
+    if (source_instance == nullptr || source_instance->get_cell_master() == nullptr) {
+      continue;
+    }
+    std::string child_master_name = source_instance->get_cell_master()->get_name();
+    DFHierarchy& df_hierarchy = df_model.get_df_hierarchy();
+    if (child_master_name == df_hierarchy.get_root_master_name()) {
+      ZHLOG.error(Loc::current(), "Hierarchy cycle detected at top master: ", child_master_name);
+      return false;
+    }
+    if (!df_model.has_df_source(child_master_name)) {
+      continue;
+    }
+    if (std::find(master_name_stack.begin(), master_name_stack.end(), child_master_name) != master_name_stack.end()) {
+      ZHLOG.error(Loc::current(), "Hierarchy cycle detected at master: ", child_master_name);
+      return false;
+    }
+
+    if (!df_hierarchy.add_parent_master_name(child_master_name, parent_master_name)) {
+      ZHLOG.error(Loc::current(), "Hierarchy graph detected: master ", child_master_name, " has parents ",
+                  df_hierarchy.get_parent_master_name(child_master_name), " and ", parent_master_name, ".");
+      return false;
+    }
+    if (visited_master_name_set.find(child_master_name) != visited_master_name_set.end()) {
+      continue;
+    }
+
+    DFSource* child_source = df_model.get_df_source(child_master_name);
+    if (child_source == nullptr || child_source->get_design() == nullptr) {
+      ZHLOG.error(Loc::current(), "Cannot find the hierarchy child DEF source: ", child_master_name);
+      return false;
+    }
+    master_name_stack.push_back(child_master_name);
+    if (!buildDFHierarchyNode(df_model, child_source->get_design(), child_master_name, master_name_stack,
+                              visited_master_name_set)) {
+      return false;
+    }
+    master_name_stack.pop_back();
+    visited_master_name_set.insert(child_master_name);
+    df_hierarchy.add_bottom_up_master_name(child_master_name);
   }
   return true;
 }
@@ -249,16 +293,20 @@ bool DefFlattener::validateDFModel(DFModel& df_model)
     return false;
   }
 
-  std::map<std::string, DFSource>& child_master_to_df_source_map = df_model.get_child_master_to_df_source_map();
-  for (std::pair<const std::string, DFSource>& source_pair : child_master_to_df_source_map) {
-    if (!validateDFSource(df_model, source_pair.first)) {
+  std::vector<std::string>& bottom_up_master_name_list = df_model.get_df_hierarchy().get_bottom_up_master_name_list();
+  for (std::string& master_name : bottom_up_master_name_list) {
+    if (!validateDFSource(df_model, master_name)) {
       return false;
     }
-  }
-  for (std::pair<const std::string, DFSource>& source_pair : child_master_to_df_source_map) {
-    std::vector<std::string> master_name_stack;
-    if (!validateDFHierarchy(df_model, source_pair.first, master_name_stack)) {
-      return false;
+    DFSource* df_source = df_model.get_df_source(master_name);
+    for (idb::IdbInstance* source_instance : df_source->get_design()->get_instance_list()->get_instance_list()) {
+      if (source_instance == nullptr || source_instance->get_cell_master() == nullptr
+          || !df_model.has_df_source(source_instance->get_cell_master()->get_name())) {
+        continue;
+      }
+      if (!validateDFInstance(df_model, df_source->get_design(), source_instance)) {
+        return false;
+      }
     }
   }
   for (idb::IdbInstance* output_instance : output_design->get_instance_list()->get_instance_list()) {
@@ -312,38 +360,6 @@ bool DefFlattener::validateDFSource(DFModel& df_model, std::string master_name)
     return false;
   }
   return validateDFDesignData(df_model, child_design);
-}
-
-bool DefFlattener::validateDFHierarchy(DFModel& df_model, std::string master_name, std::vector<std::string>& master_name_stack)
-{
-  for (std::string& stack_master_name : master_name_stack) {
-    if (stack_master_name == master_name) {
-      ZHLOG.error(Loc::current(), "Hierarchy cycle detected at master: ", master_name);
-      return false;
-    }
-  }
-  DFSource* df_source = df_model.get_df_source(master_name);
-  if (df_source == nullptr || df_source->get_design() == nullptr) {
-    ZHLOG.error(Loc::current(), "Cannot find the hierarchy child source: ", master_name);
-    return false;
-  }
-
-  master_name_stack.push_back(master_name);
-  for (idb::IdbInstance* source_instance : df_source->get_design()->get_instance_list()->get_instance_list()) {
-    if (source_instance == nullptr || source_instance->get_cell_master() == nullptr) {
-      continue;
-    }
-    std::string child_master_name = source_instance->get_cell_master()->get_name();
-    if (!df_model.has_df_source(child_master_name)) {
-      continue;
-    }
-    if (!validateDFInstance(df_model, df_source->get_design(), source_instance)
-        || !validateDFHierarchy(df_model, child_master_name, master_name_stack)) {
-      return false;
-    }
-  }
-  master_name_stack.pop_back();
-  return true;
 }
 
 bool DefFlattener::validateDFDesignData(DFModel&, idb::IdbDesign* source_design)
@@ -1115,12 +1131,7 @@ idb::IdbSpecialNet* DefFlattener::getOutputSpecialNet(DFModel& df_model, idb::Id
 {
   std::string output_net_name = net_binding.get_special_net_name(source_net);
   if (output_net_name.empty()) {
-    std::string canonical_net_name = getCanonicalPowerNetName(df_model, source_net->get_net_name());
-    if (canonical_net_name == source_net->get_net_name()) {
-      output_net_name = getHierarchyName(hierarchy_name, source_net->get_net_name());
-    } else {
-      output_net_name = canonical_net_name;
-    }
+    output_net_name = getHierarchyName(hierarchy_name, source_net->get_net_name());
     net_binding.set_special_net_name(source_net, output_net_name);
   }
   output_net_name = df_model.get_special_net_union().get_root_name(output_net_name);
@@ -1145,13 +1156,6 @@ idb::IdbVia* DefFlattener::getOutputVia(idb::IdbDesign* output_design, idb::IdbV
     output_via = output_design->get_layout()->get_via_list()->find_via(source_via->get_name());
   }
   return output_via;
-}
-
-std::string DefFlattener::getCanonicalPowerNetName(DFModel& df_model, std::string net_name)
-{
-  std::map<std::string, std::string>& power_alias_to_net_name_map = df_model.get_df_config().get_power_alias_to_net_name_map();
-  std::map<std::string, std::string>::iterator iter = power_alias_to_net_name_map.find(net_name);
-  return iter == power_alias_to_net_name_map.end() ? net_name : iter->second;
 }
 
 std::string DefFlattener::getHierarchyName(std::string hierarchy_name, std::string name)

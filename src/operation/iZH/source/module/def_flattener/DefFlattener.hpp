@@ -60,6 +60,9 @@ class DefFlattener
   bool buildDFModel(DFModel& df_model, std::map<std::string, std::any>& config_map);
   bool buildDFConfig(DFModel& df_model, std::map<std::string, std::any>& config_map);
   bool buildDFSourceMap(DFModel& df_model);
+  bool buildDFHierarchy(DFModel& df_model);
+  bool buildDFHierarchyNode(DFModel& df_model, idb::IdbDesign* parent_design, std::string parent_master_name,
+                            std::vector<std::string>& master_name_stack, std::set<std::string>& visited_master_name_set);
 
 #endif
 
@@ -67,7 +70,6 @@ class DefFlattener
 
   bool validateDFModel(DFModel& df_model);
   bool validateDFSource(DFModel& df_model, std::string master_name);
-  bool validateDFHierarchy(DFModel& df_model, std::string master_name, std::vector<std::string>& master_name_stack);
   bool validateDFDesignData(DFModel& df_model, idb::IdbDesign* source_design);
   bool validateDFInstance(DFModel& df_model, idb::IdbDesign* source_design, idb::IdbInstance* source_instance);
   bool validateDFRegularWire(idb::IdbRegularWire* source_wire);
@@ -146,7 +148,6 @@ class DefFlattener
                                            std::string hierarchy_name, DFNetBinding& net_binding);
   idb::IdbSpecialNet* getSpecialNet(idb::IdbDesign* design, idb::IdbPin* pin);
   idb::IdbVia* getOutputVia(idb::IdbDesign* output_design, idb::IdbVia* source_via);
-  std::string getCanonicalPowerNetName(DFModel& df_model, std::string net_name);
   std::string getHierarchyName(std::string hierarchy_name, std::string name);
   std::string getUniqueRegionName(idb::IdbDesign* output_design, std::string name);
 

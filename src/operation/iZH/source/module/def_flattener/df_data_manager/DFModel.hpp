@@ -16,6 +16,7 @@
 #pragma once
 
 #include "DFConfig.hpp"
+#include "DFHierarchy.hpp"
 #include "DFNetUnion.hpp"
 #include "DFSource.hpp"
 
@@ -32,6 +33,7 @@ class DFModel
   DFModel& operator=(DFModel&& other) = default;
   // getter
   DFConfig& get_df_config() { return _df_config; }
+  DFHierarchy& get_df_hierarchy() { return _df_hierarchy; }
   std::map<std::string, DFSource>& get_child_master_to_df_source_map() { return _child_master_to_df_source_map; }
   DFNetUnion& get_regular_net_union() { return _regular_net_union; }
   DFNetUnion& get_special_net_union() { return _special_net_union; }
@@ -43,12 +45,14 @@ class DFModel
   bool has_df_source(const std::string& master_name) { return get_df_source(master_name) != nullptr; }
   // const getter
   const DFConfig& get_df_config() const { return _df_config; }
+  const DFHierarchy& get_df_hierarchy() const { return _df_hierarchy; }
   // setter
   void set_df_config(const DFConfig& df_config) { _df_config = df_config; }
   // function
 
  private:
   DFConfig _df_config;
+  DFHierarchy _df_hierarchy;
   std::map<std::string, DFSource> _child_master_to_df_source_map;
   DFNetUnion _regular_net_union;
   DFNetUnion _special_net_union;

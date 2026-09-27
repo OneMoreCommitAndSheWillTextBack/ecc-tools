@@ -25,25 +25,18 @@ class DFConfig
   DFConfig() = default;
   ~DFConfig() = default;
   // getter
-  std::string& get_hierarchy_path() { return _hierarchy_path; }
-  std::map<std::string, std::string>& get_child_master_to_def_path_map() { return _child_master_to_def_path_map; }
-  std::map<std::string, std::string>& get_power_alias_to_net_name_map() { return _power_alias_to_net_name_map; }
+  std::vector<std::string>& get_hierarchy_def_path_list() { return _hierarchy_def_path_list; }
+  // const getter
+  const std::vector<std::string>& get_hierarchy_def_path_list() const { return _hierarchy_def_path_list; }
   // setter
-  void set_hierarchy_path(const std::string& hierarchy_path) { _hierarchy_path = hierarchy_path; }
-  void set_child_master_to_def_path_map(const std::map<std::string, std::string>& child_master_to_def_path_map)
+  void set_hierarchy_def_path_list(const std::vector<std::string>& hierarchy_def_path_list)
   {
-    _child_master_to_def_path_map = child_master_to_def_path_map;
-  }
-  void set_power_alias_to_net_name_map(const std::map<std::string, std::string>& power_alias_to_net_name_map)
-  {
-    _power_alias_to_net_name_map = power_alias_to_net_name_map;
+    _hierarchy_def_path_list = hierarchy_def_path_list;
   }
   // function
 
  private:
-  std::string _hierarchy_path;
-  std::map<std::string, std::string> _child_master_to_def_path_map;
-  std::map<std::string, std::string> _power_alias_to_net_name_map;
+  std::vector<std::string> _hierarchy_def_path_list;
 };
 
 }  // namespace izh
