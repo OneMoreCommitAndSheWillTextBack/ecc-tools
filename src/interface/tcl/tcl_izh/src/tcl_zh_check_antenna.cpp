@@ -22,8 +22,6 @@ namespace tcl {
 
 TclZHCheckAntenna::TclZHCheckAntenna(const char* cmd_name) : TclCmd(cmd_name)
 {
-  _config_list.push_back(std::make_pair("-report_dir", ValueType::kString));
-
   TclUtil::addOption(this, _config_list);
 }
 

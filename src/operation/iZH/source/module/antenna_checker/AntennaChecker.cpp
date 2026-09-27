@@ -25,6 +25,7 @@
 #include "ACSweepEvent.hpp"
 #include "ACUFNode.hpp"
 #include "ACUnionFind.hpp"
+#include "DataManager.hpp"
 #include "Utility.hpp"
 
 #include "IdbDesign.h"
@@ -87,16 +88,7 @@ void AntennaChecker::check(std::map<std::string, std::any> config_map)
 ACModel AntennaChecker::initACModel(std::map<std::string, std::any>& config_map)
 {
   ACModel ac_model;
-  auto it = config_map.find("-report_dir");
-  if (it != config_map.end()) {
-    if (const std::string* dir = std::any_cast<std::string>(&it->second)) {
-      ac_model.get_report_dir() = *dir;
-    } else {
-      ZHLOG.warn(Loc::current(), "config_map[\"-report_dir\"] is not a string");
-    }
-
-    config_map.erase(it);
-  }
+  ac_model.get_report_dir() = ZHDM.getConfig().ac_temp_directory_path;
 
   if (!config_map.empty()) {
     ZHLOG.warn(Loc::current(), "The checkAntenna config has not been consumed yet!");

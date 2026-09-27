@@ -14,6 +14,7 @@ add_library(izh_antenna_checker
 target_link_libraries(izh_antenna_checker
     PUBLIC
     geometry_db
+    izh_data_manager
     izh_module
     izh_toolkit
 )
