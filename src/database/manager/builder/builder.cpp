@@ -153,6 +153,7 @@ IdbDefService* IdbBuilder::buildDef(string file)
   }
 
   IdbLayout* layout = _lef_service->get_layout();
+  layout->resetDefData();
   _def_service = new IdbDefService(layout);
 
   if (IdbDefServiceResult::kServiceFailed == _def_service->DefFileInit(file.c_str())) {
@@ -188,6 +189,7 @@ IdbDefService* IdbBuilder::buildDefGzip(string gzip_file)
   }
 
   IdbLayout* layout = _lef_service->get_layout();
+  layout->resetDefData();
   _def_service = new IdbDefService(layout);
 
   if (IdbDefServiceResult::kServiceFailed == _def_service->DefFileInit(gzip_file.c_str())) {
