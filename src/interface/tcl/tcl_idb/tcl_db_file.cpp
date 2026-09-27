@@ -563,9 +563,6 @@ CmdSaveGDS::CmdSaveGDS(const char* cmd_name) : TclCmd(cmd_name)
   auto* path = new TclStringOption(TCL_PATH, 1);
   addOption(path);
 
-  auto* harden_option = new TclSwitchOption("-harden");
-  addOption(harden_option);
-
   auto* layer_map_option = new TclStringOption("-layer_map", 1, nullptr);
   addOption(layer_map_option);
 }
@@ -577,9 +574,6 @@ unsigned CmdSaveGDS::check()
 
   TclOption* path = getOptionOrArg(TCL_PATH);
   ecc::checkTclOption(path, TCL_PATH);
-
-  TclOption* harden_option = getOptionOrArg("-harden");
-  ecc::checkTclOption(harden_option, "-harden");
 
   TclOption* layer_map_option = getOptionOrArg("-layer_map");
   ecc::checkTclOption(layer_map_option, "-layer_map");
@@ -601,15 +595,10 @@ unsigned CmdSaveGDS::exec()
 
   TclOption* def_path = getOptionOrArg(TCL_PATH);
   auto str_path = def_path->getStringVal();
-  TclOption* harden_option = getOptionOrArg("-harden");
-  bool is_harden = false;
-  if (harden_option->is_set_val()) {
-    is_harden = true;
-  }
   if (str_path != nullptr) {
     TclOption* layer_map_option = getOptionOrArg("-layer_map");
     const char* layer_map_path = layer_map_option == nullptr ? nullptr : layer_map_option->getStringVal();
-    if (!dmInst->saveGDSII(str_path, is_harden, layer_map_path == nullptr ? "" : layer_map_path)) {
+    if (!dmInst->saveGDSII(str_path, layer_map_path == nullptr ? "" : layer_map_path)) {
       return 0;
     }
     return 1;

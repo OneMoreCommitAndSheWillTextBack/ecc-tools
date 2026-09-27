@@ -39,7 +39,7 @@
 #include "tcl_register_ipw.h"
 #include "tcl_register_ifp.h"
 #include "tcl_register_iemir.h"
-#include "tcl_register_izh.h"
+#include "tcl_register_imj.h"
 #include "tcl_register_ircx.h"
 #include "tcl_register_report.h"
 
@@ -84,8 +84,8 @@ int registerCommands()
   /// RCX
   registerCmdRCX();
 
-  /// ZH
-  registerCmdZH();
+  /// MJ
+  registerCmdMJ();
 
   registerCmdReport();
   return EXIT_SUCCESS;
