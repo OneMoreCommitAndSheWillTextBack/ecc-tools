@@ -21,6 +21,28 @@
 
 namespace python_interface {
 
+bool initZHConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map)
+{
+  auto config_file = std::ifstream(config);
+  if (!config_file.is_open()) {
+    return false;
+  }
+  nlohmann::json json;
+  config_file >> json;
+  std::string value = ecc::getJsonData(json, {"ZH", "-temp_directory_path"});
+  if (!value.empty()) {
+    config_map["-temp_directory_path"] = value;
+  }
+  return true;
+}
+
+void initZHConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map)
+{
+  if (config_dict.count("-temp_directory_path") > 0 && !config_dict["-temp_directory_path"].empty()) {
+    config_map["-temp_directory_path"] = config_dict["-temp_directory_path"];
+  }
+}
+
 bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map)
 {
   auto config_file = std::ifstream(config);

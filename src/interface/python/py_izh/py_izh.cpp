@@ -22,6 +22,8 @@
 
 namespace python_interface {
 
+bool initZHConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+void initZHConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
 bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
 void initFillerConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
 bool initAntennaConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
@@ -30,6 +32,18 @@ bool initMetalConfigMapByJSON(const std::string& config, std::map<std::string, s
 void initMetalConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
 bool initDefFlattenConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
 void initDefFlattenConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
+
+bool initZH(std::string& config, std::map<std::string, std::string>& config_dict)
+{
+  std::map<std::string, std::any> config_map;
+  bool pass = config.empty() ? true : initZHConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
+  }
+  initZHConfigMapByDict(config_dict, config_map);
+  ZHI.initZH(config_map);
+  return true;
+}
 
 bool insertFiller(std::string& config, std::map<std::string, std::string>& config_dict)
 {
@@ -76,6 +90,12 @@ bool defFlatten(std::string& config, std::map<std::string, std::string>& config_
   }
   initDefFlattenConfigMapByDict(config_dict, config_map);
   ZHI.flattenDef(config_map);
+  return true;
+}
+
+bool destroyZH()
+{
+  ZHI.destroyZH();
   return true;
 }
 

@@ -25,10 +25,12 @@ namespace py = pybind11;
 
 void register_izh(py::module& m)
 {
+  m.def("init_zh", initZH, py::arg("config") = "", py::arg("config_dict") = std::map<std::string, std::string>{});
   m.def("insert_filler", insertFiller, py::arg("config") = "", py::arg("config_dict") = std::map<std::string, std::string>{});
   m.def("check_antenna", checkAntenna, py::arg("config") = "", py::arg("config_dict") = std::map<std::string, std::string>{});
   m.def("insert_metal", insertMetal, py::arg("config") = "", py::arg("config_dict") = std::map<std::string, std::string>{});
   m.def("def_flatten", defFlatten, py::arg("config") = "", py::arg("config_dict") = std::map<std::string, std::string>{});
+  m.def("destroy_zh", destroyZH);
 }
 
 }  // namespace python_interface
