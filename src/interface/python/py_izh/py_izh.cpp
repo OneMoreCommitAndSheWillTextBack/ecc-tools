@@ -22,43 +22,59 @@
 
 namespace python_interface {
 
-bool insert_filler(const std::string& filler)
+bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+void initFillerConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
+bool initAntennaConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+void initAntennaConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
+bool initMetalConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+void initMetalConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
+bool initDefFlattenConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
+void initDefFlattenConfigMapByDict(std::map<std::string, std::string>& config_dict, std::map<std::string, std::any>& config_map);
+
+bool insertFiller(std::string& config, std::map<std::string, std::string>& config_dict)
 {
   std::map<std::string, std::any> config_map;
-  if (!filler.empty()) {
-    config_map["-filler"] = filler;
+  bool pass = config.empty() ? true : initFillerConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
   }
+  initFillerConfigMapByDict(config_dict, config_map);
   ZHI.insertFiller(config_map);
   return true;
 }
 
-bool check_antenna(const std::string& report_dir)
+bool checkAntenna(std::string& config, std::map<std::string, std::string>& config_dict)
 {
   std::map<std::string, std::any> config_map;
-  if (!report_dir.empty()) {
-    config_map["-report_dir"] = report_dir;
+  bool pass = config.empty() ? true : initAntennaConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
   }
+  initAntennaConfigMapByDict(config_dict, config_map);
   ZHI.checkAntenna(config_map);
   return true;
 }
 
-bool insert_metal(const std::string& min_fill_layer, const std::string& max_fill_layer)
+bool insertMetal(std::string& config, std::map<std::string, std::string>& config_dict)
 {
   std::map<std::string, std::any> config_map;
-  if (!min_fill_layer.empty()) {
-    config_map["-min_fill_layer"] = min_fill_layer;
+  bool pass = config.empty() ? true : initMetalConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
   }
-  if (!max_fill_layer.empty()) {
-    config_map["-max_fill_layer"] = max_fill_layer;
-  }
+  initMetalConfigMapByDict(config_dict, config_map);
   ZHI.insertMetal(config_map);
   return true;
 }
 
-bool def_flatten(const std::string& hierarchy)
+bool defFlatten(std::string& config, std::map<std::string, std::string>& config_dict)
 {
   std::map<std::string, std::any> config_map;
-  config_map["-hierarchy"] = hierarchy;
+  bool pass = config.empty() ? true : initDefFlattenConfigMapByJSON(config, config_map);
+  if (!pass) {
+    return false;
+  }
+  initDefFlattenConfigMapByDict(config_dict, config_map);
   ZHI.flattenDef(config_map);
   return true;
 }
