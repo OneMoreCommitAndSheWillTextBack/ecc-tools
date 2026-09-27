@@ -434,11 +434,7 @@ bool IdbBuilder::saveGDSII(string file, string layer_map_path /* = "" */)
   }
 
   std::shared_ptr<Def2GdsWrite> gds_write = std::make_shared<Def2GdsWrite>(_def_service);
-  if(is_hardened) {
-    return gds_write->writeHardenedDb(file.c_str(), layer_map_path.empty() ? nullptr : layer_map_path.c_str());
-  }else{
-    return gds_write->writeDb(file.c_str(), layer_map_path.empty() ? nullptr : layer_map_path.c_str());
-  }
+  return gds_write->writeDb(file.c_str(), layer_map_path.empty() ? nullptr : layer_map_path.c_str());
 }
 
 bool IdbBuilder::saveJSON(string file, string options)
