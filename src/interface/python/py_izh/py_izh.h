@@ -16,13 +16,13 @@
 // ***************************************************************************************
 #pragma once
 
-#include <tcl_util.h>
+#include <string>
 
 namespace python_interface {
 
-bool insert_filler(const std::string& config);
-bool insert_metal(const std::string& config);
-bool check_antenna(const std::string& config, const std::string& report_dir);
+bool insert_filler(const std::string& filler);
+bool check_antenna(const std::string& report_dir);
+bool insert_metal(const std::string& min_fill_layer, const std::string& max_fill_layer);
 bool def_flatten(const std::string& hierarchy);
 
 }  // namespace python_interface

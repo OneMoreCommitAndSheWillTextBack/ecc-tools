@@ -22,51 +22,36 @@
 
 namespace python_interface {
 
-bool initAntennaConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
-bool initFillerConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
-bool initMetalConfigMapByJSON(const std::string& config, std::map<std::string, std::any>& config_map);
-
-bool insert_filler(const std::string& config)
+bool insert_filler(const std::string& filler)
 {
   std::map<std::string, std::any> config_map;
-
-  bool pass = config.empty() ? true : initFillerConfigMapByJSON(config, config_map);
-  if (!pass) {
-    return false;
+  if (!filler.empty()) {
+    config_map["-filler"] = filler;
   }
-
   ZHI.insertFiller(config_map);
   return true;
 }
 
-bool insert_metal(const std::string& config)
+bool check_antenna(const std::string& report_dir)
 {
   std::map<std::string, std::any> config_map;
-
-  bool pass = config.empty() ? true : initMetalConfigMapByJSON(config, config_map);
-  if (!pass) {
-    return false;
-  }
-
-  ZHI.insertMetal(config_map);
-  return true;
-}
-
-bool check_antenna(const std::string& config, const std::string& report_dir)
-{
-  std::map<std::string, std::any> config_map;
-
-  bool pass = config.empty() ? true : initAntennaConfigMapByJSON(config, config_map);
-  if (!pass) {
-    return false;
-  }
-
   if (!report_dir.empty()) {
     config_map["-report_dir"] = report_dir;
   }
-
   ZHI.checkAntenna(config_map);
+  return true;
+}
 
+bool insert_metal(const std::string& min_fill_layer, const std::string& max_fill_layer)
+{
+  std::map<std::string, std::any> config_map;
+  if (!min_fill_layer.empty()) {
+    config_map["-min_fill_layer"] = min_fill_layer;
+  }
+  if (!max_fill_layer.empty()) {
+    config_map["-max_fill_layer"] = max_fill_layer;
+  }
+  ZHI.insertMetal(config_map);
   return true;
 }
 
