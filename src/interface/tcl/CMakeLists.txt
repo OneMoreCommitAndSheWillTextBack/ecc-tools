@@ -10,7 +10,7 @@ add_subdirectory(tcl_ista)
 add_subdirectory(tcl_ipw)
 add_subdirectory(tcl_ifp)
 add_subdirectory(tcl_iemir)
-add_subdirectory(tcl_izh)
+add_subdirectory(tcl_imj)
 add_subdirectory(tcl_ircx)
 add_subdirectory(tcl_report)
 add_subdirectory(tcl_feature)
@@ -33,7 +33,7 @@ target_link_libraries(ecc_tcl
         tcl_ipw
         tcl_ifp
         tcl_iemir
-        tcl_izh
+        tcl_imj
         tcl_ircx
         tcl_report
         tcl_feature

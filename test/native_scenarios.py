@@ -47,11 +47,17 @@ def antenna(manifest: dict[str, Any]) -> dict[str, Path]:
     _setup(manifest)
     _read_design(manifest)
     output_dir = Path(manifest["output_dir"])
-    report_file = output_dir / "antenna_check.rpt"
+    temp_directory = output_dir / "mj"
+    report_file = temp_directory / "antenna_checker" / "antenna_check.rpt"
     _require(
-        ecc_py.check_antenna("", str(output_dir)),
+        ecc_py.init_mj("", {"-temp_directory_path": str(temp_directory)}),
+        "init_mj",
+    )
+    _require(
+        ecc_py.check_antenna(),
         "check_antenna",
     )
+    _require(ecc_py.destroy_mj(), "destroy_mj")
     _require_file(report_file)
     return {"report": report_file}
 
