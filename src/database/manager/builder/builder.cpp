@@ -256,7 +256,6 @@ IdbDefService* IdbBuilder::buildVerilog(string file, std::string top_module_name
   }
 
   IdbLayout* layout = _lef_service->get_layout();
-  layout->resetDefData();
   _def_service = new IdbDefService(layout);
 
   if (IdbDefServiceResult::kServiceFailed == _def_service->VerilogFileInit(file.c_str())) {
