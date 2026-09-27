@@ -21,6 +21,7 @@
 #include "DFTransform.hpp"
 #include "IdbDesign.h"
 #include "IdbInstance.h"
+#include "IdbLayout.h"
 #include "IdbNet.h"
 #include "IdbPins.h"
 #include "IdbRegularWire.h"
@@ -55,11 +56,18 @@ class DefFlattener
   DefFlattener& operator=(DefFlattener&& other) = delete;
   // function
 
+  bool connectSpecialPinList(DFModel& df_model, idb::IdbDesign* output_design);
+
 #if 1  // build
 
   bool buildDFModel(DFModel& df_model, std::map<std::string, std::any>& config_map);
   bool buildDFConfig(DFModel& df_model, std::map<std::string, std::any>& config_map);
+  bool buildDFPGConnectList(DFConfig& df_config, std::string pg_connect_list_string);
   bool buildDFSourceMap(DFModel& df_model);
+  bool buildDFSourceMasterList(DFModel& df_model, idb::IdbLayout* layout);
+  bool buildDFSourceViaList(DFModel& df_model);
+  bool buildDFVia(idb::IdbVia* source_via);
+  bool buildDFViaMaster(idb::IdbViaMaster* source_via_master, idb::IdbViaMaster* output_via_master);
   bool buildDFHierarchy(DFModel& df_model);
   bool buildDFHierarchyNode(DFModel& df_model, idb::IdbDesign* parent_design, std::string parent_master_name,
                             std::vector<std::string>& master_name_stack, std::set<std::string>& visited_master_name_set);
@@ -69,6 +77,7 @@ class DefFlattener
 #if 1  // check
 
   bool validateDFModel(DFModel& df_model);
+  bool validateDFPGConnectList(DFModel& df_model);
   bool validateDFSource(DFModel& df_model, std::string master_name);
   bool validateDFDesignData(DFModel& df_model, idb::IdbDesign* source_design);
   bool validateDFInstance(DFModel& df_model, idb::IdbDesign* source_design, idb::IdbInstance* source_instance);
@@ -91,6 +100,7 @@ class DefFlattener
                            idb::IdbNet* child_net, std::string output_net_name);
   bool bindChildSpecialNet(DFModel& df_model, idb::IdbDesign* output_design, DFNetBinding& child_net_binding,
                            idb::IdbSpecialNet* child_net, std::string output_net_name);
+  idb::IdbSpecialNet* getOutputPGNet(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbNet* source_net);
   void flattenDesign(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbDesign* source_design,
                      std::string hierarchy_name, DFTransform transform, DFNetBinding& net_binding,
                      DFRegionNameMap& region_name_map);
@@ -116,7 +126,11 @@ class DefFlattener
                               std::string hierarchy_name, DFTransform transform, DFNetBinding& net_binding);
   void copyRegularWire(idb::IdbDesign* output_design, idb::IdbNet* output_net, idb::IdbRegularWire* source_wire,
                        DFTransform transform);
+  void copyRegularWire(idb::IdbDesign* output_design, idb::IdbSpecialNet* output_net, idb::IdbRegularWire* source_wire,
+                       DFTransform transform);
   void copyRegularWireSegment(idb::IdbDesign* output_design, idb::IdbRegularWireSegment* output_segment,
+                              idb::IdbRegularWireSegment* source_segment, DFTransform transform);
+  void copyRegularWireSegment(idb::IdbDesign* output_design, idb::IdbSpecialWireSegment* output_segment,
                               idb::IdbRegularWireSegment* source_segment, DFTransform transform);
   void copySpecialNetWireList(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbDesign* source_design,
                               std::string hierarchy_name, DFTransform transform, DFNetBinding& net_binding);
@@ -147,6 +161,7 @@ class DefFlattener
   idb::IdbSpecialNet* getOutputSpecialNet(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbSpecialNet* source_net,
                                            std::string hierarchy_name, DFNetBinding& net_binding);
   idb::IdbSpecialNet* getSpecialNet(idb::IdbDesign* design, idb::IdbPin* pin);
+  idb::IdbSpecialNet* getRelatedSpecialNet(idb::IdbDesign* design, idb::IdbNet* regular_net);
   idb::IdbVia* getOutputVia(idb::IdbDesign* output_design, idb::IdbVia* source_via);
   std::string getHierarchyName(std::string hierarchy_name, std::string name);
   std::string getUniqueRegionName(idb::IdbDesign* output_design, std::string name);
