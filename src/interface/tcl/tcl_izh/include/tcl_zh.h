@@ -20,7 +20,21 @@
 
 namespace tcl {
 
-#if 1  // zh
+#if 1  // iZH
+
+class TclInitZH : public TclCmd
+{
+ public:
+  explicit TclInitZH(const char* cmd_name);
+  ~TclInitZH() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
+
+ private:
+  std::vector<std::pair<std::string, ValueType>> _config_list;
+};
 
 class TclZHInsertFiller : public TclCmd
 {
@@ -76,6 +90,17 @@ class TclZHDefFlatten : public TclCmd
 
  private:
   std::vector<std::pair<std::string, ValueType>> _config_list;
+};
+
+class TclDestroyZH : public TclCmd
+{
+ public:
+  explicit TclDestroyZH(const char* cmd_name);
+  ~TclDestroyZH() override = default;
+
+  unsigned check() override { return 1; };
+
+  unsigned exec() override;
 };
 
 #endif

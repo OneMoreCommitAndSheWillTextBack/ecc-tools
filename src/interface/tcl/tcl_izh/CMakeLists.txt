@@ -1,6 +1,8 @@
 add_library(tcl_izh
     ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_zh_check_antenna.cpp
     ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_zh_def_flatten.cpp
+    ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_destroy_zh.cpp
+    ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_init_zh.cpp
     ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_zh_insert_filler.cpp
     ${HOME_INTERFACE}/tcl/tcl_izh/src/tcl_zh_insert_metal.cpp
 )

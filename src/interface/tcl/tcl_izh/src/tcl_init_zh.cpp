@@ -10,27 +10,31 @@
 //
 // THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+// MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 //
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
-#pragma once
-
+#include "ZHInterface.hpp"
+#include "tcl_util.h"
 #include "tcl_zh.h"
-
-using namespace ecc;
 
 namespace tcl {
 
-int registerCmdZH()
+TclInitZH::TclInitZH(const char* cmd_name) : TclCmd(cmd_name)
 {
-  registerTclCmd(TclInitZH, "init_zh");
-  registerTclCmd(TclZHInsertFiller, "insert_filler");
-  registerTclCmd(TclZHCheckAntenna, "check_antenna");
-  registerTclCmd(TclZHInsertMetal, "insert_metal");
-  registerTclCmd(TclZHDefFlatten, "def_flatten");
-  registerTclCmd(TclDestroyZH, "destroy_zh");
-  return EXIT_SUCCESS;
+  _config_list.push_back(std::make_pair("-temp_directory_path", ValueType::kString));
+
+  TclUtil::addOption(this, _config_list);
+}
+
+unsigned TclInitZH::exec()
+{
+  if (!check()) {
+    return 0;
+  }
+  std::map<std::string, std::any> config_map = TclUtil::getConfigMap(this, _config_list);
+  ZHI.initZH(config_map);
+  return 1;
 }
 
 }  // namespace tcl

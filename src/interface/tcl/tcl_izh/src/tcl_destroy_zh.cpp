@@ -10,27 +10,27 @@
 //
 // THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-// MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+// MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 //
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
-#pragma once
-
+#include "ZHInterface.hpp"
+#include "tcl_util.h"
 #include "tcl_zh.h"
-
-using namespace ecc;
 
 namespace tcl {
 
-int registerCmdZH()
+TclDestroyZH::TclDestroyZH(const char* cmd_name) : TclCmd(cmd_name)
 {
-  registerTclCmd(TclInitZH, "init_zh");
-  registerTclCmd(TclZHInsertFiller, "insert_filler");
-  registerTclCmd(TclZHCheckAntenna, "check_antenna");
-  registerTclCmd(TclZHInsertMetal, "insert_metal");
-  registerTclCmd(TclZHDefFlatten, "def_flatten");
-  registerTclCmd(TclDestroyZH, "destroy_zh");
-  return EXIT_SUCCESS;
+}
+
+unsigned TclDestroyZH::exec()
+{
+  if (!check()) {
+    return 0;
+  }
+  ZHI.destroyZH();
+  return 1;
 }
 
 }  // namespace tcl
