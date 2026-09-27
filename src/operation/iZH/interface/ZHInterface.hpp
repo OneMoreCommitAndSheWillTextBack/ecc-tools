@@ -15,8 +15,6 @@
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
 #pragma once
-#include <string>
-
 #include <any>
 #include <cstdint>
 #include <map>
@@ -77,11 +75,30 @@ class ZHInterface
 
 #if 1  // 外部调用ZH的API
 
-#if 1  // izh
+#if 1  // iZH
+  void initZH(std::map<std::string, std::any> config_map);
   void insertFiller(std::map<std::string, std::any> config_map);
   void insertMetal(std::map<std::string, std::any> config_map);
   void checkAntenna(std::map<std::string, std::any> config_map);
   void flattenDef(std::map<std::string, std::any> config_map);
+  void destroyZH();
+#endif
+
+#endif
+
+#if 1  // ZH调用外部的API
+
+#if 1  // TopData
+
+#if 1  // input
+  void input(std::map<std::string, std::any>& config_map);
+  void wrapConfig(std::map<std::string, std::any>& config_map);
+#endif
+
+#if 1  // output
+  void output();
+#endif
+
 #endif
 
 #endif
