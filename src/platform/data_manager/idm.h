@@ -152,8 +152,6 @@ class DataManager
   void saveVerilog(string verilog_path, std::set<std::string>&& exclude_cell_names = {}, bool is_add_space_for_escape_name = false);
   bool saveGDSII(string path, string layer_map_path = "");
   bool saveJSON(string path, string options);
-  bool saveViewJson(string output_dir, ViewJsonWriteOptions options = {});
-  bool applyViewJsonEdits(string edits_path, bool compressed_hint = false);
   bool saveData(string data_path);
   bool loadData(string data_path);
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -24,7 +24,6 @@
 #include "IdbSpecialNet.h"
 #include "feature_manager.h"
 #include <idm.h>
-#include "view_json_io.h"
 
 #include <optional>
 #include <utility>
@@ -192,17 +191,6 @@ bool saveJson(const std::string& path)
   return dmInst->saveJSON(path, options);
 }
 
-bool saveViewJson(const std::string& output_dir, const std::string& json_format, bool compress)
-{
-  idb::ViewJsonWriteOptions options;
-  if (!idb::parseViewJsonFormat(json_format, options.format)) {
-    ECCLOG.warn(ecc::Loc::current(), "Save view json failed: unsupported json_format `", json_format, "`, expected `pretty` or `compact`.");
-    return false;
-  }
-  options.compress = compress;
-  return dmInst->saveViewJson(output_dir, options);
-}
-
 bool saveGeometrySnapshot(const std::string& output_dir, bool include_drc)
 {
   idb::IdbDesign* design = dmInst->get_idb_design();
@@ -311,11 +299,6 @@ bool resetGeometrySession()
 {
   geometry_edit_session().reset();
   return true;
-}
-
-bool applyViewJsonEdits(const std::string& edits_path, bool compress)
-{
-  return dmInst->applyViewJsonEdits(edits_path, compress);
 }
 
 bool saveData(const std::string& path)
