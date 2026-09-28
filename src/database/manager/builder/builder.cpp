@@ -89,7 +89,7 @@ void IdbBuilder::log()
   double min_gate_area = 1e9;
   double sum_area = 0;
   IdbInstance* min_gate = nullptr;
-  for (int i = 0; i < design->get_instance_list()->get_instance_list().size(); i++) {
+  for (int32_t i = 0; i < static_cast<int32_t>(design->get_instance_list()->get_instance_list().size()); i++) {
     auto* inst = design->get_instance_list()->get_instance_list().at(i);
     double inst_area = inst->get_bounding_box()->get_area();
     sum_area += inst_area;

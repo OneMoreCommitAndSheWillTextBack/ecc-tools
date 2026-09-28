@@ -1162,7 +1162,7 @@ bool ViewJsonWriter::writeLayerIndex()
     const int id = layerId(layer);
     ViewJson item;
     item["layer_id"] = id;
-    for (const std::string& object_kind : {"regular_wires", "special_wires", "io_pins", "blockages", "fills"}) {
+    for (const std::string object_kind : {"regular_wires", "special_wires", "io_pins", "blockages", "fills"}) {
       item[object_kind] = ViewJson::array();
       auto layer_iter = _layer_parts.find(id);
       if (layer_iter != _layer_parts.end()) {
