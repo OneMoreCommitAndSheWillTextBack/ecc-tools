@@ -771,7 +771,6 @@ int32_t DefRead::parse_die(defiBox* def_box)
   // IdbDesign* design = _def_service->get_design();
   IdbLayout* layout = _def_service->get_layout();
   IdbDie* die = layout->get_die();
-
   defiPoints points = def_box->getPoint();
   for (int i = 0; i < points.numPoints; ++i) {
     die->add_point(points.x[i], points.y[i]);
@@ -1022,7 +1021,6 @@ int32_t DefRead::componentEndCallback(defrCallbackType_e type, void*, defiUserDa
     return kDbFail;
   }
 
-  ECCLOG.info(ecc::Loc::current(), "");
   def_reader->set_end_time(clock());
 
   return kDbSuccess;
@@ -1281,7 +1279,6 @@ int32_t DefRead::netEndCallback(defrCallbackType_e type, void*, defiUserData dat
     return kDbFail;
   }
 
-  ECCLOG.info(ecc::Loc::current(), "");
 
   return kDbSuccess;
 }
@@ -1579,7 +1576,6 @@ int32_t DefRead::specialNetEndCallback(defrCallbackType_e type, void*, defiUserD
     return kDbFail;
   }
 
-  ECCLOG.info(ecc::Loc::current(), "");
 
   ECCLOG.info(ecc::Loc::current(), "End parse Specialnet.");
 
