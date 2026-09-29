@@ -392,6 +392,55 @@ TEST_F(ClockTraceFixtureInterface, ClockGateMuxLatchAndMacroAreTerminalBoundarie
   }
 }
 
+TEST_F(ClockTraceFixtureInterface, LibertyClockGateArcCrossesMisdeclaredLefOutput)
+{
+  auto* source_master = addMaster("CLK_SOURCE", {{"Y", idb::IdbConnectDirection::kOutput}});
+  auto* gate_master = addMaster("ICG_X1", {{"CK", idb::IdbConnectDirection::kInput, idb::IdbConnectType::kClock, true},
+                                           {"E"},
+                                           {"ECK", idb::IdbConnectDirection::kInput, idb::IdbConnectType::kClock}});
+  auto* sink_master = addMaster("DFF_X1", {{"CK", idb::IdbConnectDirection::kInput, idb::IdbConnectType::kClock, true}});
+  auto* lib_cell = _lib_cells.at("ICG_X1");
+  lib_cell->get_cell_port_or_port_bus("ECK")->set_port_type(idb::LibPort::LibertyPortType::kOutput);
+  const auto add_arc = [lib_cell](const char* source, const char* sink, const char* timing_type) -> void {
+    auto arc = std::make_unique<idb::LibArc>();
+    arc->set_src_port(source);
+    arc->set_snk_port(sink);
+    arc->set_timing_type(timing_type);
+    arc->set_timing_sense("positive_unate");
+    arc->set_owner_cell(lib_cell);
+    lib_cell->addLibertyArc(std::move(arc));
+  };
+  add_arc("CK", "ECK", "combinational");
+  add_arc("CK", "E", "setup_rising");
+  ASSERT_TRUE(lib_cell->isICG());
+
+  auto* source = addInst("source", source_master);
+  auto* gate = addInst("gate", gate_master);
+  auto* sink = addInst("sink", sink_master, true);
+  connect("root", {pin(source, "Y"), pin(gate, "CK")});
+  connect("gated", {pin(gate, "ECK"), pin(sink, "CK")});
+
+  const auto build = trace(clockData({primaryClock("clk", "root")}));
+  ASSERT_EQ(build.output.clock_targets.size(), 1U);
+  const auto& target = build.output.clock_targets.front();
+  ASSERT_EQ(target.propagation_steps.size(), 1U);
+  EXPECT_EQ(target.propagation_steps.front().kind, icts::ClockTracePropagationKind::kClockGate);
+  EXPECT_EQ(target.propagation_steps.front().input_pin_name, "CK");
+  EXPECT_EQ(target.propagation_steps.front().output_pin_name, "ECK");
+  const auto* root_record = findRecord(build, "clk", "root", "accepted");
+  ASSERT_NE(root_record, nullptr);
+  EXPECT_EQ(root_record->target_kind, "clock_gate_ck");
+  ASSERT_NE(findRecord(build, "clk", "gated", "accepted"), nullptr);
+
+  const auto generated = trace(clockData({primaryClock("clk", "root"), generatedClock("gclk", "gated", "clk")}));
+  ASSERT_EQ(generated.output.clock_targets.size(), 2U);
+  const auto* generated_master_root = findRecord(generated, "clk", "root", "accepted");
+  ASSERT_NE(generated_master_root, nullptr);
+  EXPECT_EQ(generated_master_root->target_kind, "clock_gate_ck");
+  EXPECT_EQ(findRecord(generated, "clk", "gated", "accepted"), nullptr);
+  ASSERT_NE(findRecord(generated, "gclk", "gated", "accepted"), nullptr);
+}
+
 TEST_F(ClockTraceFixtureInterface, GeneratedClockTargetStopsMasterClockOwnershipBeforeItsBoundary)
 {
   auto* source_master = addMaster("CLK_SOURCE", {{"Y", idb::IdbConnectDirection::kOutput}});

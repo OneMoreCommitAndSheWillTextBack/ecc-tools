@@ -48,6 +48,7 @@
 #include "fixture/FastSTATestModel.hh"
 #include "liberty/FastSTALibertyModel.hh"
 #include "timing/FastSTAClockTiming.hh"
+#include "timing/FastSTAConstraints.hh"
 
 namespace icts_test {
 namespace {
@@ -104,6 +105,24 @@ TEST(FastSTATest, InvalidEnvironmentFailsClosedBeforeContextBuild)
 
   EXPECT_FALSE(result.context.has_value());
   EXPECT_EQ(result.failure_reason, "fast_sta_environment_wrapper_unavailable");
+}
+
+TEST(FastSTATest, ClockGateWithoutOutputFunctionHasUnknownActivity)
+{
+  icts::FastStaContext context;
+  icts::FastStaClockGateModel gate;
+  gate.clock_port = "CK";
+  gate.output_port = "ECK";
+
+  EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kUnknown);
+  gate.latch_based = true;
+  EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kInvalid);
+  gate.state = "IQ";
+  gate.data_expression = "E";
+  gate.latch_enable_expression = "!CK";
+  EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kUnknown);
+  gate.output_expression = "CK & (";
+  EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kInvalid);
 }
 
 class ScopedRootInputSlew

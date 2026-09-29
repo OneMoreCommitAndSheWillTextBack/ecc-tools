@@ -496,6 +496,9 @@ auto FastStaConstraints::gateActive(const FastStaContext& context, const std::st
   if (gate.latch_based && (gate.state.empty() || gate.data_expression.empty() || gate.latch_enable_expression.empty())) {
     return FastStaLogicValue::kInvalid;
   }
+  if (gate.output_expression.empty() && !gate.clock_port.empty() && !gate.output_port.empty()) {
+    return FastStaLogicValue::kUnknown;
+  }
   return FastStaCondition::isSensitized(expandedGateFunction(gate), gate.clock_port, caseLookup(context, inst_name));
 }
 
