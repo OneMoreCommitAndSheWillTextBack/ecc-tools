@@ -47,7 +47,6 @@ void register_idb(py::module& m)
         py::arg("is_add_space_for_escape_name") = false);
   m.def("gds_save", saveGDSII, py::arg("gds_name"), py::arg("layer_map_path"));
   m.def("json_save", saveJson, py::arg("path"));
-  m.def("view_json_save", saveViewJson, py::arg("output_dir"), py::arg("json_format") = "pretty", py::arg("compress") = false);
   m.def("geometry_snapshot_save", saveGeometrySnapshot, py::arg("output_dir"), py::arg("include_drc") = false);
   m.def("place_instance", placeInstance, py::arg("inst_name"), py::arg("llx"), py::arg("lly"), py::arg("orient"), py::arg("cellmaster"),
         py::arg("source") = "", py::arg("placement_status") = "fixed", py::arg("create_if_missing") = true);
@@ -55,7 +54,6 @@ void register_idb(py::module& m)
   m.def("sync_instance_geometry", syncInstanceGeometry, py::arg("inst_name"));
   m.def("geometry_session_snapshot_save", saveGeometrySessionSnapshot, py::arg("output_dir"));
   m.def("reset_geometry_session", resetGeometrySession);
-  m.def("view_json_apply_edits", applyViewJsonEdits, py::arg("edits_path"), py::arg("compress") = false);
   m.def("save_data", saveData, py::arg("path"));
   m.def("reset_data", resetData);
   m.def("load_data", loadData, py::arg("path"));

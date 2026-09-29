@@ -92,8 +92,8 @@ auto queryLibPortCapacitanceProfilePf(idb::LibPort* lib_port) -> std::optional<s
     return std::nullopt;
   }
   std::array<std::array<double, 2U>, 2U> profile{};
-  for (const auto [analysis_index, analysis] : {std::pair{0U, idb::AnalysisMode::kMin}, std::pair{1U, idb::AnalysisMode::kMax}}) {
-    for (const auto [transition_index, transition] : {std::pair{0U, idb::TransType::kRise}, std::pair{1U, idb::TransType::kFall}}) {
+  for (const auto& [analysis_index, analysis] : {std::pair{0U, idb::AnalysisMode::kMin}, std::pair{1U, idb::AnalysisMode::kMax}}) {
+    for (const auto& [transition_index, transition] : {std::pair{0U, idb::TransType::kRise}, std::pair{1U, idb::TransType::kFall}}) {
       auto value = lib_port->get_port_cap(analysis, transition);
       if (!value.has_value() && lib_port->has_port_cap()) {
         value = lib_port->get_port_cap();

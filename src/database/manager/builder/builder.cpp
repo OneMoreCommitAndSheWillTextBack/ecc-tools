@@ -89,7 +89,7 @@ void IdbBuilder::log()
   double min_gate_area = 1e9;
   double sum_area = 0;
   IdbInstance* min_gate = nullptr;
-  for (int i = 0; i < design->get_instance_list()->get_instance_list().size(); i++) {
+  for (int32_t i = 0; i < static_cast<int32_t>(design->get_instance_list()->get_instance_list().size()); i++) {
     auto* inst = design->get_instance_list()->get_instance_list().at(i);
     double inst_area = inst->get_bounding_box()->get_area();
     sum_area += inst_area;
@@ -448,16 +448,6 @@ bool IdbBuilder::saveJSON(string file, string options)
   // ECCLOG.info(ecc::Loc::current(), "Options: ", options);
   std::shared_ptr<Gds2JsonWrite> json_write = std::make_shared<Gds2JsonWrite>(_def_service);
   return json_write->writeDb(file.c_str(), options);
-}
-
-bool IdbBuilder::saveViewJson(string output_dir, ViewJsonWriteOptions options)
-{
-  return writeViewJson(_def_service, output_dir, options);
-}
-
-bool IdbBuilder::applyViewJsonEdits(string edits_path, bool compressed_hint)
-{
-  return idb::applyViewJsonEdits(_def_service, edits_path, compressed_hint);
 }
 
 void IdbBuilder::saveLayout(string folder)
