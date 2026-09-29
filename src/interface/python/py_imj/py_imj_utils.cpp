@@ -128,6 +128,10 @@ bool initDefFlattenConfigMapByJSON(const std::string& config, std::map<std::stri
   if (!value.empty()) {
     config_map["-hierarchy"] = value;
   }
+  value = ecc::getJsonData(json, {"MJ", "-pg_connect"});
+  if (!value.empty()) {
+    config_map["-pg_connect"] = value;
+  }
   return true;
 }
 
@@ -136,6 +140,9 @@ void initDefFlattenConfigMapByDict(std::map<std::string, std::string>& config_di
 {
   if (config_dict.count("-hierarchy") > 0 && !config_dict["-hierarchy"].empty()) {
     config_map["-hierarchy"] = config_dict["-hierarchy"];
+  }
+  if (config_dict.count("-pg_connect") > 0 && !config_dict["-pg_connect"].empty()) {
+    config_map["-pg_connect"] = config_dict["-pg_connect"];
   }
 }
 

@@ -13,28 +13,33 @@
 // MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 // See the Mulan PSL v2 for more details.
 // ***************************************************************************************
-#include "MJInterface.hpp"
-#include "tcl_util.h"
-#include "tcl_mj.h"
+#pragma once
 
-namespace tcl {
+#include "DFSource.hpp"
+#include "defrReader.hpp"
 
-TclFlattenDef::TclFlattenDef(const char* cmd_name) : TclCmd(cmd_name)
+namespace imj {
+
+class DFSourceReader
 {
-  _config_list.push_back(std::make_pair("-hierarchy", ValueType::kString));
-  _config_list.push_back(std::make_pair("-pg_connect", ValueType::kString));
+ public:
+  DFSourceReader() = default;
+  ~DFSourceReader() = default;
+  DFSourceReader(const DFSourceReader& other) = delete;
+  DFSourceReader(DFSourceReader&& other) = delete;
+  DFSourceReader& operator=(const DFSourceReader& other) = delete;
+  DFSourceReader& operator=(DFSourceReader&& other) = delete;
+  // function
+  bool read(DFSource& df_source);
 
-  TclUtil::addOption(this, _config_list);
-}
+ private:
+  DFSource* _df_source = nullptr;
+  // function
+  bool readDef();
+  bool readGzipDef();
+  static int32_t readDesign(defrCallbackType_e type, const char* design_name, defiUserData data);
+  static int32_t readDieArea(defrCallbackType_e type, defiBox* die_area, defiUserData data);
+  static int32_t readPin(defrCallbackType_e type, defiPin* pin, defiUserData data);
+};
 
-unsigned TclFlattenDef::exec()
-{
-  if (!check()) {
-    return 0;
-  }
-  std::map<std::string, std::any> config_map = TclUtil::getConfigMap(this, _config_list);
-  MJI.flattenDef(config_map);
-  return 1;
-}
-
-}  // namespace tcl
+}  // namespace imj

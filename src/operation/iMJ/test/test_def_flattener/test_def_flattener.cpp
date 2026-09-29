@@ -16,6 +16,7 @@
 #include "DefFlattener.hpp"
 #include "IdbDesign.h"
 #include "IdbInstance.h"
+#include "IdbLayout.h"
 #include "IdbNet.h"
 #include "IdbPins.h"
 #include "IdbSpecialNet.h"
@@ -28,7 +29,9 @@ int main()
   std::filesystem::path data_directory_path = std::filesystem::path(__FILE__).parent_path() / "data";
   std::vector<std::string> tech_lef_path_list = {(data_directory_path / "tech.lef").string()};
   std::vector<std::string> cell_lef_path_list = {(data_directory_path / "cell.lef").string()};
+  std::vector<std::string> leaf_lef_path_list = {(data_directory_path / "leaf.lef").string()};
   std::filesystem::path top_def_path = data_directory_path / "top.def.in";
+  std::filesystem::path top_pg_connect_def_path = data_directory_path / "top_pg_connect.def.in";
   std::filesystem::path top_orient_def_path = data_directory_path / "top_orient.def.in";
   std::filesystem::path top_graph_def_path = data_directory_path / "top_graph.def.in";
   std::string hierarchy_def_path_list = (data_directory_path / "pass.def.in").string() + " "
@@ -89,10 +92,12 @@ int main()
 
   std::map<std::string, std::any> config_map;
   config_map["-hierarchy"] = hierarchy_def_path_list;
+  config_map["-pg_connect"] = std::string("{{VDD VDD VPWR} {VSS VSS VGND}}");
   imj::DefFlattener::initInst();
   MJDF.flatten(config_map);
   imj::DefFlattener::destroyInst();
 
+  design = dmInst->get_idb_design();
   idb::IdbInstance* child_instance = design->get_instance_list()->find_instance("u_child");
   idb::IdbInstance* pass_instance = design->get_instance_list()->find_instance("u_pass");
   idb::IdbInstance* leaf_instance = design->get_instance_list()->find_instance("u_child__u_mid__u_leaf");
@@ -163,6 +168,35 @@ int main()
   std::filesystem::remove(output_def_path);
   dmInst->reset();
 
+  if (!dmInst->readLef(tech_lef_path_list, true) || !dmInst->readLef(cell_lef_path_list)
+      || !dmInst->readDef(top_pg_connect_def_path.string())) {
+    dmInst->reset();
+    return 1;
+  }
+  std::map<std::string, std::any> pg_connect_config_map;
+  pg_connect_config_map["-hierarchy"] = hierarchy_def_path_list;
+  pg_connect_config_map["-pg_connect"] = std::string("{{VDD VDD VPWR} {VSS VSS VGND}}");
+  imj::DefFlattener::initInst();
+  MJDF.flatten(pg_connect_config_map);
+  imj::DefFlattener::destroyInst();
+
+  design = dmInst->get_idb_design();
+  leaf_instance = design == nullptr ? nullptr : design->get_instance_list()->find_instance("u_child__u_mid__u_leaf");
+  vdd_net = design == nullptr ? nullptr : design->get_special_net_list()->find_net("VDD");
+  vss_net = design == nullptr ? nullptr : design->get_special_net_list()->find_net("VSS");
+  leaf_vdd_pin = leaf_instance == nullptr ? nullptr : leaf_instance->get_pin_by_term("VPWR");
+  leaf_vss_pin = leaf_instance == nullptr ? nullptr : leaf_instance->get_pin_by_term("VGND");
+  if (design == nullptr || leaf_instance == nullptr || vdd_net == nullptr || vss_net == nullptr || leaf_vdd_pin == nullptr
+      || leaf_vss_pin == nullptr || leaf_vdd_pin->get_special_net() != vdd_net || leaf_vss_pin->get_special_net() != vss_net
+      || design->get_special_net_list()->find_net("u_child__VPWR") != nullptr
+      || design->get_special_net_list()->find_net("u_child__VGND") != nullptr
+      || design->get_net_list()->find_net("u_child__VPWR") != nullptr
+      || design->get_net_list()->find_net("u_child__VGND") != nullptr) {
+    dmInst->reset();
+    return 1;
+  }
+  dmInst->reset();
+
   if (!dmInst->readLef(tech_lef_path_list, true) || !dmInst->readLef(cell_lef_path_list) || !dmInst->readDef(top_graph_def_path.string())) {
     dmInst->reset();
     return 1;
@@ -221,6 +255,37 @@ int main()
       dmInst->reset();
       return 1;
     }
+  }
+  dmInst->reset();
+
+  if (!dmInst->readLef(tech_lef_path_list, true) || !dmInst->readLef(leaf_lef_path_list)) {
+    dmInst->reset();
+    return 1;
+  }
+  dmInst->get_config().set_def_path(top_def_path.string());
+  if (dmInst->readDef(top_def_path.string())) {
+    dmInst->reset();
+    return 1;
+  }
+  imj::DefFlattener::initInst();
+  MJDF.flatten(config_map);
+  imj::DefFlattener::destroyInst();
+
+  design = dmInst->get_idb_design();
+  idb::IdbInstance* generated_leaf_instance = design == nullptr
+                                                  ? nullptr
+                                                  : design->get_instance_list()->find_instance("u_child__u_mid__u_leaf");
+  idb::IdbNet* generated_top_in_net = design == nullptr ? nullptr : design->get_net_list()->find_net("top_in");
+  idb::IdbNet* generated_top_out_net = design == nullptr ? nullptr : design->get_net_list()->find_net("top_out");
+  if (design == nullptr || design->get_instance_list()->find_instance("u_child") != nullptr
+      || design->get_instance_list()->find_instance("u_pass") != nullptr || generated_leaf_instance == nullptr
+      || generated_top_in_net == nullptr || generated_top_out_net == nullptr
+      || generated_leaf_instance->get_pin_by_term("A") == nullptr || generated_leaf_instance->get_pin_by_term("Y") == nullptr
+      || generated_leaf_instance->get_pin_by_term("A")->get_net() != generated_top_in_net
+      || generated_leaf_instance->get_pin_by_term("Y")->get_net() != generated_top_out_net
+      || dmInst->get_idb_layout()->get_die()->get_points().size() != 2) {
+    dmInst->reset();
+    return 1;
   }
   dmInst->reset();
   return 0;
