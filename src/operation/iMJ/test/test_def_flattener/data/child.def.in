@@ -35,11 +35,14 @@ SPECIALNETS 2 ;
     + ROUTED M1 100 ( 0 0 ) ( 10000 0 ) ;
 END SPECIALNETS
 
-NETS 2 ;
+NETS 4 ;
   - n_in ( PIN IN ) ( u_mid IN ) + USE SIGNAL
     + ROUTED M1 ( 0 1000 ) ( 1000 1000 ) ;
   - n_out ( u_mid OUT ) ( PIN OUT ) + USE SIGNAL
     + ROUTED M1 ( 2000 1000 ) ( 10000 1000 ) ;
+  - VPWR ( PIN VPWR ) ( u_mid VPWR )
+    + ROUTED M1 ( 0 5000 ) ( 10000 5000 ) ;
+  - VGND ( PIN VGND ) ( u_mid VGND ) ;
 END NETS
 
 END DESIGN

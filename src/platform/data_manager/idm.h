@@ -152,8 +152,6 @@ class DataManager
   void saveVerilog(string verilog_path, std::set<std::string>&& exclude_cell_names = {}, bool is_add_space_for_escape_name = false);
   bool saveGDSII(string path, string layer_map_path = "");
   bool saveJSON(string path, string options);
-  bool saveViewJson(string output_dir, ViewJsonWriteOptions options = {});
-  bool applyViewJsonEdits(string edits_path, bool compressed_hint = false);
   bool saveData(string data_path);
   bool loadData(string data_path);
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,7 +201,7 @@ class DataManager
 
   void place_macro_generate_tcl(std::string directory, std::string tcl_name, int number = 100);
   bool place_macro_loc_rand(std::string tcl_path);
-  void scale_macro_loc();
+  // void scale_macro_loc();
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

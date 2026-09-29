@@ -131,22 +131,6 @@ bool DataManager::saveJSON(string path, string options)
   return _idb_builder->saveJSON(path, options);
 }
 
-bool DataManager::saveViewJson(string output_dir, ViewJsonWriteOptions options)
-{
-  if (_idb_builder == nullptr || _idb_def_service == nullptr || _layout == nullptr) {
-    return false;
-  }
-  return _idb_builder->saveViewJson(output_dir, options);
-}
-
-bool DataManager::applyViewJsonEdits(string edits_path, bool compressed_hint)
-{
-  if (_idb_builder == nullptr || _idb_def_service == nullptr || _layout == nullptr) {
-    return false;
-  }
-  return _idb_builder->applyViewJsonEdits(edits_path, compressed_hint);
-}
-
 bool DataManager::saveData(string data_path)
 {
   if (_idb_builder == nullptr) {

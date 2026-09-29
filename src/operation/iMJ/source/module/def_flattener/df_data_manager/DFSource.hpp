@@ -32,6 +32,7 @@ class DFSource
   // getter
   std::string& get_master_name() { return _master_name; }
   std::string& get_def_path() { return _def_path; }
+  std::vector<std::string>& get_pin_name_list() { return _pin_name_list; }
   std::unique_ptr<idb::IdbBuilder>& get_idb_builder() { return _idb_builder; }
   idb::IdbDefService* get_def_service() { return _idb_builder == nullptr ? nullptr : _idb_builder->get_def_service(); }
   idb::IdbDesign* get_design()
@@ -48,16 +49,21 @@ class DFSource
   // const getter
   const std::string& get_master_name() const { return _master_name; }
   const std::string& get_def_path() const { return _def_path; }
+  const std::vector<std::string>& get_pin_name_list() const { return _pin_name_list; }
   // setter
   void set_master_name(const std::string& master_name) { _master_name = master_name; }
   void set_def_path(const std::string& def_path) { _def_path = def_path; }
+  void set_pin_name_list(const std::vector<std::string>& pin_name_list) { _pin_name_list = pin_name_list; }
   void set_idb_builder(std::unique_ptr<idb::IdbBuilder> idb_builder) { _idb_builder = std::move(idb_builder); }
   void set_die_area(const DFDieArea& die_area) { _die_area = die_area; }
   // function
+  void clear_pin_name_list() { _pin_name_list.clear(); }
+  void add_pin_name(const std::string& pin_name) { _pin_name_list.push_back(pin_name); }
 
  private:
   std::string _master_name;
   std::string _def_path;
+  std::vector<std::string> _pin_name_list;
   std::unique_ptr<idb::IdbBuilder> _idb_builder;
   DFDieArea _die_area;
 };

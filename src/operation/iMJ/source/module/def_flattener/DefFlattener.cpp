@@ -16,6 +16,7 @@
 
 #include "DefFlattener.hpp"
 
+#include "DFSourceReader.hpp"
 #include "IdbBlockages.h"
 #include "IdbCellMaster.h"
 #include "IdbDesign.h"
@@ -31,9 +32,15 @@
 #include "IdbSpecialNet.h"
 #include "IdbSpecialWire.h"
 #include "IdbUnits.h"
+#include "IdbViaMaster.h"
+#include "IdbViaRule.h"
 #include "IdbVias.h"
 #include "idm.h"
 #include "lef_service.h"
+#include "defiPinCap.hpp"
+#include "defiSite.hpp"
+#include "defrReader.hpp"
+#include "defzlib.hpp"
 
 namespace imj {
 
@@ -93,9 +100,31 @@ void DefFlattener::flatten(std::map<std::string, std::any> config_map)
     flattenInstance(df_model, output_design, output_design, top_instance, "", DFTransform(), root_net_binding, true);
     flattened_instance_num++;
   }
+  if (!connectSpecialPinList(df_model, output_design)) {
+    return;
+  }
 
   MJLOG.info(Loc::current(), "Flattened ", flattened_instance_num, " hierarchy instances");
   MJLOG.info(Loc::current(), "Completed", monitor.getStatsInfo());
+}
+
+bool DefFlattener::connectSpecialPinList(DFModel& df_model, idb::IdbDesign* output_design)
+{
+  std::map<std::string, std::vector<idb::IdbPin*>> output_special_net_name_to_pin_list_map;
+  for (std::pair<const std::string, std::vector<idb::IdbPin*>>& source_pair : df_model.get_special_net_name_to_pin_list_map()) {
+    std::string output_special_net_name = df_model.get_special_net_union().get_root_name(source_pair.first);
+    std::vector<idb::IdbPin*>& output_pin_list = output_special_net_name_to_pin_list_map[output_special_net_name];
+    output_pin_list.insert(output_pin_list.end(), source_pair.second.begin(), source_pair.second.end());
+  }
+
+  for (std::pair<const std::string, std::vector<idb::IdbPin*>>& output_pair : output_special_net_name_to_pin_list_map) {
+    idb::IdbSpecialNet* output_special_net = output_design->get_special_net_list()->find_net(output_pair.first);
+    if (output_special_net == nullptr || !output_design->connectPinsToSpecialNet(output_pair.second, output_special_net)) {
+      MJLOG.error(Loc::current(), "Cannot connect flattened special net pins: ", output_pair.first);
+      return false;
+    }
+  }
+  return true;
 }
 
 #if 1  // build
@@ -143,7 +172,121 @@ bool DefFlattener::buildDFConfig(DFModel& df_model, std::map<std::string, std::a
     return false;
   }
 
+  config_iter = config_map.find("-pg_connect");
+  if (config_iter != config_map.end()) {
+    std::string* pg_connect_list_string_ptr = std::any_cast<std::string>(&config_iter->second);
+    if (pg_connect_list_string_ptr == nullptr || !buildDFPGConnectList(df_config, *pg_connect_list_string_ptr)) {
+      return false;
+    }
+  }
+
   df_model.set_df_config(df_config);
+  return true;
+}
+
+bool DefFlattener::buildDFPGConnectList(DFConfig& df_config, std::string pg_connect_list_string)
+{
+  std::map<std::string, std::string> child_net_name_to_top_net_name_map;
+  int32_t string_size = static_cast<int32_t>(pg_connect_list_string.size());
+  int32_t begin_idx = 0;
+  int32_t end_idx = string_size - 1;
+  while (begin_idx < string_size && std::isspace(static_cast<unsigned char>(pg_connect_list_string[begin_idx]))) {
+    begin_idx++;
+  }
+  while (end_idx >= begin_idx && std::isspace(static_cast<unsigned char>(pg_connect_list_string[end_idx]))) {
+    end_idx--;
+  }
+  if (begin_idx > end_idx) {
+    return true;
+  }
+  if (pg_connect_list_string[begin_idx] == '{') {
+    int32_t brace_depth = 0;
+    int32_t outer_end_idx = -1;
+    for (int32_t idx = begin_idx; idx <= end_idx; idx++) {
+      if (pg_connect_list_string[idx] == '{') {
+        brace_depth++;
+      } else if (pg_connect_list_string[idx] == '}') {
+        brace_depth--;
+        if (brace_depth == 0) {
+          outer_end_idx = idx;
+          break;
+        }
+      }
+      if (brace_depth < 0) {
+        MJLOG.error(Loc::current(), "The -pg_connect option has unmatched braces.");
+        return false;
+      }
+    }
+    if (brace_depth != 0) {
+      MJLOG.error(Loc::current(), "The -pg_connect option has unmatched braces.");
+      return false;
+    }
+    if (outer_end_idx == end_idx) {
+      pg_connect_list_string = pg_connect_list_string.substr(begin_idx + 1, end_idx - begin_idx - 1);
+      string_size = static_cast<int32_t>(pg_connect_list_string.size());
+    }
+  }
+
+  int32_t string_idx = 0;
+  while (string_idx < string_size) {
+    while (string_idx < string_size && std::isspace(static_cast<unsigned char>(pg_connect_list_string[string_idx]))) {
+      string_idx++;
+    }
+    if (string_idx == string_size) {
+      break;
+    }
+
+    std::string pg_connect_string;
+    if (pg_connect_list_string[string_idx] == '{') {
+      int32_t begin_idx = ++string_idx;
+      int32_t brace_depth = 1;
+      while (string_idx < string_size && brace_depth > 0) {
+        if (pg_connect_list_string[string_idx] == '{') {
+          brace_depth++;
+        } else if (pg_connect_list_string[string_idx] == '}') {
+          brace_depth--;
+        }
+        string_idx++;
+      }
+      if (brace_depth != 0) {
+        MJLOG.error(Loc::current(), "The -pg_connect option has unmatched braces.");
+        return false;
+      }
+      pg_connect_string = pg_connect_list_string.substr(begin_idx, string_idx - begin_idx - 1);
+    } else {
+      pg_connect_string = pg_connect_list_string.substr(string_idx);
+      string_idx = string_size;
+    }
+
+    std::istringstream pg_connect_stream(pg_connect_string);
+    std::vector<std::string> pg_net_name_list;
+    std::string pg_net_name;
+    while (pg_connect_stream >> pg_net_name) {
+      if (pg_net_name.find('{') != std::string::npos || pg_net_name.find('}') != std::string::npos) {
+        MJLOG.error(Loc::current(), "The -pg_connect option has invalid nested braces.");
+        return false;
+      }
+      pg_net_name_list.push_back(pg_net_name);
+    }
+    if (pg_net_name_list.size() < 2) {
+      MJLOG.error(Loc::current(), "Each -pg_connect group must contain one top net and at least one child net.");
+      return false;
+    }
+
+    DFPGConnect pg_connect;
+    pg_connect.set_top_net_name(pg_net_name_list.front());
+    for (int32_t pg_net_idx = 1; pg_net_idx < static_cast<int32_t>(pg_net_name_list.size()); pg_net_idx++) {
+      std::string& child_net_name = pg_net_name_list[pg_net_idx];
+      std::map<std::string, std::string>::iterator child_net_iter = child_net_name_to_top_net_name_map.find(child_net_name);
+      if (child_net_iter != child_net_name_to_top_net_name_map.end() && child_net_iter->second != pg_connect.get_top_net_name()) {
+        MJLOG.error(Loc::current(), "The child PG net maps to multiple top nets: ", child_net_name);
+        return false;
+      }
+      child_net_name_to_top_net_name_map[child_net_name] = pg_connect.get_top_net_name();
+      pg_connect.get_child_net_name_list().push_back(child_net_name);
+    }
+    df_config.get_pg_connect_list().push_back(pg_connect);
+  }
   return true;
 }
 
@@ -160,43 +303,321 @@ bool DefFlattener::buildDFSourceMap(DFModel& df_model)
     return false;
   }
 
+  DFSourceReader df_source_reader;
   std::vector<std::string>& hierarchy_def_path_list = df_model.get_df_config().get_hierarchy_def_path_list();
   for (std::string& hierarchy_def_path : hierarchy_def_path_list) {
+    DFSource df_source;
+    df_source.set_def_path(hierarchy_def_path);
+    if (!df_source_reader.read(df_source)) {
+      MJLOG.error(Loc::current(), "Cannot read hierarchy DEF metadata: ", hierarchy_def_path);
+      return false;
+    }
+    if (df_source.get_master_name().empty() || !df_source.get_die_area().is_valid()) {
+      MJLOG.error(Loc::current(), "The hierarchy DEF data is incomplete: ", hierarchy_def_path);
+      return false;
+    }
+    if (df_model.has_df_source(df_source.get_master_name())) {
+      MJLOG.error(Loc::current(), "Multiple hierarchy DEF files use DESIGN ", df_source.get_master_name(), ".");
+      return false;
+    }
+    df_model.get_child_master_to_df_source_map().emplace(df_source.get_master_name(), std::move(df_source));
+  }
+
+  if (!buildDFSourceMasterList(df_model, dmInst->get_idb_layout())) {
+    return false;
+  }
+
+  bool is_root_design_loaded = false;
+  idb::IdbDesign* root_design = dmInst->get_idb_design();
+  if (root_design != nullptr && root_design->get_instance_list() != nullptr) {
+    for (idb::IdbInstance* root_instance : root_design->get_instance_list()->get_instance_list()) {
+      if (root_instance != nullptr && root_instance->get_cell_master() != nullptr
+          && df_model.has_df_source(root_instance->get_cell_master()->get_name())) {
+        is_root_design_loaded = true;
+        break;
+      }
+    }
+  }
+  if (!is_root_design_loaded) {
+    std::string root_def_path = dmInst->get_config().get_def_path();
+    idb::IdbDefService* root_def_service = dmInst->get_idb_def_service();
+    if (root_def_path.empty() && root_def_service != nullptr) {
+      root_def_path = root_def_service->get_def_file();
+    }
+    if (root_def_path.empty() || !dmInst->readDef(root_def_path)) {
+      MJLOG.error(Loc::current(), "Cannot read top DEF file: ", root_def_path);
+      return false;
+    }
+  }
+
+  for (std::pair<const std::string, DFSource>& source_pair : df_model.get_child_master_to_df_source_map()) {
+    DFSource& df_source = source_pair.second;
     std::unique_ptr<idb::IdbBuilder> idb_builder = std::make_unique<idb::IdbBuilder>();
     std::vector<std::string> child_lef_file_list = lef_file_list;
-    if (idb_builder->buildLef(child_lef_file_list) == nullptr || idb_builder->buildDef(hierarchy_def_path) == nullptr) {
-      MJLOG.error(Loc::current(), "Cannot read child DEF file: ", hierarchy_def_path);
+    idb::IdbLefService* child_lef_service = idb_builder->buildLef(child_lef_file_list);
+    if (child_lef_service == nullptr || !buildDFSourceMasterList(df_model, child_lef_service->get_layout())
+        || idb_builder->buildDef(df_source.get_def_path()) == nullptr) {
+      MJLOG.error(Loc::current(), "Cannot read child DEF file: ", df_source.get_def_path());
       return false;
     }
 
     idb::IdbDefService* child_def_service = idb_builder->get_def_service();
     idb::IdbDesign* child_design = child_def_service == nullptr ? nullptr : child_def_service->get_design();
     idb::IdbLayout* child_layout = child_def_service == nullptr ? nullptr : child_def_service->get_layout();
-    if (child_design == nullptr || child_layout == nullptr || child_layout->get_die() == nullptr) {
-      MJLOG.error(Loc::current(), "The child DEF data is incomplete: ", hierarchy_def_path);
-      return false;
-    }
-    std::string master_name = child_design->get_design_name();
-    if (master_name.empty()) {
-      MJLOG.error(Loc::current(), "The child DEF DESIGN name is empty: ", hierarchy_def_path);
-      return false;
-    }
-    if (df_model.has_df_source(master_name)) {
-      MJLOG.error(Loc::current(), "Multiple hierarchy DEF files use DESIGN ", master_name, ".");
+    if (child_design == nullptr || child_layout == nullptr || child_layout->get_die() == nullptr
+        || child_design->get_design_name() != df_source.get_master_name()) {
+      MJLOG.error(Loc::current(), "The child DEF data is incomplete: ", df_source.get_def_path());
       return false;
     }
     child_design->materializeAllSpecialNetWildcardPins();
     child_layout->get_die()->set_bounding_box();
-
-    DFSource df_source;
-    df_source.set_master_name(master_name);
-    df_source.set_def_path(hierarchy_def_path);
-    df_source.set_die_area(DFDieArea(child_layout->get_die()->get_llx(), child_layout->get_die()->get_lly(),
-                                     child_layout->get_die()->get_urx(), child_layout->get_die()->get_ury()));
+    if (child_layout->get_die()->get_llx() != df_source.get_die_area().get_ll_x()
+        || child_layout->get_die()->get_lly() != df_source.get_die_area().get_ll_y()
+        || child_layout->get_die()->get_urx() != df_source.get_die_area().get_ur_x()
+        || child_layout->get_die()->get_ury() != df_source.get_die_area().get_ur_y()) {
+      MJLOG.error(Loc::current(), "The child DEF DIEAREA changed while reading: ", df_source.get_def_path());
+      return false;
+    }
     df_source.set_idb_builder(std::move(idb_builder));
-    df_model.get_child_master_to_df_source_map().emplace(master_name, std::move(df_source));
+  }
+
+  if (!buildDFSourceViaList(df_model)) {
+    return false;
   }
   return true;
+}
+
+bool DefFlattener::buildDFSourceMasterList(DFModel& df_model, idb::IdbLayout* layout)
+{
+  if (layout == nullptr || layout->get_cell_master_list() == nullptr) {
+    MJLOG.error(Loc::current(), "Cannot build hierarchy masters without LEF layout data.");
+    return false;
+  }
+
+  for (std::pair<const std::string, DFSource>& source_pair : df_model.get_child_master_to_df_source_map()) {
+    DFSource& df_source = source_pair.second;
+    idb::IdbCellMaster* cell_master = layout->get_cell_master_list()->find_cell_master(df_source.get_master_name());
+    if (cell_master != nullptr) {
+      continue;
+    }
+    cell_master = layout->get_cell_master_list()->set_cell_master(df_source.get_master_name());
+    if (cell_master == nullptr) {
+      MJLOG.error(Loc::current(), "Cannot create hierarchy master: ", df_source.get_master_name());
+      return false;
+    }
+    cell_master->set_type(idb::CellMasterType::kBlock);
+    cell_master->set_origin_x(0);
+    cell_master->set_origin_y(0);
+    cell_master->set_width(static_cast<uint32_t>(df_source.get_die_area().get_width()));
+    cell_master->set_height(static_cast<uint32_t>(df_source.get_die_area().get_height()));
+    for (std::string& pin_name : df_source.get_pin_name_list()) {
+      if (cell_master->add_term(pin_name) == nullptr) {
+        MJLOG.error(Loc::current(), "Cannot create hierarchy master pin: ", df_source.get_master_name(), "/", pin_name);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool DefFlattener::buildDFSourceViaList(DFModel& df_model)
+{
+  for (std::pair<const std::string, DFSource>& source_pair : df_model.get_child_master_to_df_source_map()) {
+    idb::IdbDesign* source_design = source_pair.second.get_design();
+    if (source_design == nullptr || source_design->get_via_list() == nullptr) {
+      MJLOG.error(Loc::current(), "The child DEF via data is incomplete: ", source_pair.first);
+      return false;
+    }
+    for (idb::IdbVia* source_via : source_design->get_via_list()->get_via_list()) {
+      if (!buildDFVia(source_via)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool DefFlattener::buildDFVia(idb::IdbVia* source_via)
+{
+  idb::IdbDesign* output_design = dmInst->get_idb_design();
+  if (source_via == nullptr || output_design == nullptr || output_design->get_via_list() == nullptr || source_via->get_name().empty()) {
+    MJLOG.error(Loc::current(), "Cannot build an invalid child via.");
+    return false;
+  }
+  if (output_design->get_via_list()->find_via(source_via->get_name()) != nullptr
+      || output_design->get_layout()->get_via_list()->find_via(source_via->get_name()) != nullptr) {
+    return true;
+  }
+
+  idb::IdbViaMaster* source_via_master = source_via->get_instance();
+  if (source_via_master == nullptr) {
+    MJLOG.error(Loc::current(), "Cannot find child via master: ", source_via->get_name());
+    return false;
+  }
+  idb::IdbVia* output_via = output_design->get_via_list()->add_via(source_via->get_name());
+  idb::IdbViaMaster* output_via_master = source_via_master->clone();
+  output_via->set_instance(output_via_master);
+  output_via->set_coordinate(source_via->get_coordinate());
+  return buildDFViaMaster(source_via_master, output_via_master);
+}
+
+bool DefFlattener::buildDFViaMaster(idb::IdbViaMaster* source_via_master, idb::IdbViaMaster* output_via_master)
+{
+  idb::IdbLayout* output_layout = dmInst->get_idb_layout();
+  if (source_via_master == nullptr || output_via_master == nullptr || output_layout == nullptr || output_layout->get_layers() == nullptr
+      || output_layout->get_via_rule_list() == nullptr) {
+    MJLOG.error(Loc::current(), "Cannot build an incomplete child via master.");
+    return false;
+  }
+
+  if (source_via_master->is_generate()) {
+    idb::IdbViaMasterGenerate* source_generate = source_via_master->get_master_generate();
+    idb::IdbViaMasterGenerate* output_generate = output_via_master->get_master_generate();
+    if (source_generate == nullptr || output_generate == nullptr || source_generate->get_layer_bottom() == nullptr
+        || source_generate->get_layer_cut() == nullptr || source_generate->get_layer_top() == nullptr) {
+      MJLOG.error(Loc::current(), "The child generated via data is incomplete: ", source_via_master->get_name());
+      return false;
+    }
+    idb::IdbLayerRouting* output_layer_bottom
+        = dynamic_cast<idb::IdbLayerRouting*>(output_layout->get_layers()->find_layer(source_generate->get_layer_bottom()->get_name()));
+    idb::IdbLayerCut* output_layer_cut
+        = dynamic_cast<idb::IdbLayerCut*>(output_layout->get_layers()->find_layer(source_generate->get_layer_cut()->get_name()));
+    idb::IdbLayerRouting* output_layer_top
+        = dynamic_cast<idb::IdbLayerRouting*>(output_layout->get_layers()->find_layer(source_generate->get_layer_top()->get_name()));
+    idb::IdbViaRuleGenerate* output_via_rule
+        = output_layout->get_via_rule_list()->find_via_rule_generate(source_generate->get_rule_name());
+    if (output_layer_bottom == nullptr || output_layer_cut == nullptr || output_layer_top == nullptr || output_via_rule == nullptr) {
+      MJLOG.error(Loc::current(), "The child generated via uses data missing from the active LEF: ", source_via_master->get_name());
+      return false;
+    }
+    output_generate->set_rule_generate(output_via_rule);
+    output_generate->set_layer_bottom(output_layer_bottom);
+    output_generate->set_layer_cut(output_layer_cut);
+    output_generate->set_layer_top(output_layer_top);
+  } else if (source_via_master->is_fix()) {
+    for (idb::IdbViaMasterFixed* output_fixed : output_via_master->get_master_fixed_list()) {
+      if (output_fixed == nullptr || output_fixed->get_layer() == nullptr) {
+        MJLOG.error(Loc::current(), "The child fixed via data is incomplete: ", source_via_master->get_name());
+        return false;
+      }
+      idb::IdbLayer* output_layer = output_layout->get_layers()->find_layer(output_fixed->get_layer()->get_name());
+      if (output_layer == nullptr) {
+        MJLOG.error(Loc::current(), "The child fixed via uses a layer missing from the active LEF: ", source_via_master->get_name());
+        return false;
+      }
+      output_fixed->set_layer(output_layer);
+    }
+  } else {
+    MJLOG.error(Loc::current(), "The child via type is invalid: ", source_via_master->get_name());
+    return false;
+  }
+
+  output_via_master->set_via_shape();
+  return true;
+}
+
+bool DFSourceReader::read(DFSource& df_source)
+{
+  _df_source = &df_source;
+  _df_source->set_master_name("");
+  _df_source->set_die_area(DFDieArea());
+  _df_source->clear_pin_name_list();
+  bool is_success = _df_source->get_def_path().ends_with(".gz") ? readGzipDef() : readDef();
+  _df_source = nullptr;
+  return is_success;
+}
+
+bool DFSourceReader::readDef()
+{
+  FILE* file = std::fopen(_df_source->get_def_path().c_str(), "r");
+  if (file == nullptr) {
+    return false;
+  }
+
+  defrInit();
+  defrReset();
+  defrInitSession();
+  defrSetDesignCbk(readDesign);
+  defrSetDieAreaCbk(readDieArea);
+  defrSetPinCbk(readPin);
+  int32_t result = defrRead(file, _df_source->get_def_path().c_str(), static_cast<defiUserData>(this), 1);
+  defrUnsetCallbacks();
+  defrClear();
+  std::fclose(file);
+  return result == 0;
+}
+
+bool DFSourceReader::readGzipDef()
+{
+  defGZFile file = defrGZipOpen(_df_source->get_def_path().c_str(), "r");
+  if (file == nullptr) {
+    return false;
+  }
+
+  defrInit();
+  defrReset();
+  defrInitSession();
+  defrSetGZipReadFunction();
+  defrSetDesignCbk(readDesign);
+  defrSetDieAreaCbk(readDieArea);
+  defrSetPinCbk(readPin);
+  int32_t result = defrReadGZip(file, _df_source->get_def_path().c_str(), static_cast<defiUserData>(this));
+  defrUnsetCallbacks();
+  defrClear();
+  defrGZipClose(file);
+  return result == 0;
+}
+
+int32_t DFSourceReader::readDesign(defrCallbackType_e, const char* design_name, defiUserData data)
+{
+  DFSourceReader* df_source_reader = static_cast<DFSourceReader*>(data);
+  if (df_source_reader == nullptr || df_source_reader->_df_source == nullptr || design_name == nullptr) {
+    return 1;
+  }
+  std::string master_name = design_name;
+  std::erase(master_name, '\\');
+  df_source_reader->_df_source->set_master_name(master_name);
+  return 0;
+}
+
+int32_t DFSourceReader::readDieArea(defrCallbackType_e, defiBox* die_area, defiUserData data)
+{
+  DFSourceReader* df_source_reader = static_cast<DFSourceReader*>(data);
+  if (df_source_reader == nullptr || df_source_reader->_df_source == nullptr || die_area == nullptr) {
+    return 1;
+  }
+  defiPoints point_list = die_area->getPoint();
+  if (point_list.numPoints <= 0) {
+    return 1;
+  }
+  int32_t ll_x = INT32_MAX;
+  int32_t ll_y = INT32_MAX;
+  int32_t ur_x = INT32_MIN;
+  int32_t ur_y = INT32_MIN;
+  for (int32_t point_idx = 0; point_idx < point_list.numPoints; point_idx++) {
+    ll_x = std::min(ll_x, point_list.x[point_idx]);
+    ll_y = std::min(ll_y, point_list.y[point_idx]);
+    ur_x = std::max(ur_x, point_list.x[point_idx]);
+    ur_y = std::max(ur_y, point_list.y[point_idx]);
+  }
+  df_source_reader->_df_source->set_die_area(DFDieArea(ll_x, ll_y, ur_x, ur_y));
+  return 0;
+}
+
+int32_t DFSourceReader::readPin(defrCallbackType_e, defiPin* pin, defiUserData data)
+{
+  DFSourceReader* df_source_reader = static_cast<DFSourceReader*>(data);
+  if (df_source_reader == nullptr || df_source_reader->_df_source == nullptr || pin == nullptr || pin->pinName() == nullptr) {
+    return 1;
+  }
+  std::string pin_name = pin->pinName();
+  std::erase(pin_name, '\\');
+  std::vector<std::string>& pin_name_list = df_source_reader->_df_source->get_pin_name_list();
+  if (std::find(pin_name_list.begin(), pin_name_list.end(), pin_name) != pin_name_list.end()) {
+    return 1;
+  }
+  df_source_reader->_df_source->add_pin_name(pin_name);
+  return 0;
 }
 
 bool DefFlattener::buildDFHierarchy(DFModel& df_model)
@@ -292,6 +713,9 @@ bool DefFlattener::validateDFModel(DFModel& df_model)
     MJLOG.error(Loc::current(), "The active IDB design data is incomplete.");
     return false;
   }
+  if (!validateDFPGConnectList(df_model)) {
+    return false;
+  }
 
   std::vector<std::string>& bottom_up_master_name_list = df_model.get_df_hierarchy().get_bottom_up_master_name_list();
   for (std::string& master_name : bottom_up_master_name_list) {
@@ -317,6 +741,22 @@ bool DefFlattener::validateDFModel(DFModel& df_model)
       continue;
     }
     if (!validateDFInstance(df_model, output_design, output_instance)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool DefFlattener::validateDFPGConnectList(DFModel& df_model)
+{
+  idb::IdbDesign* output_design = dmInst->get_idb_design();
+  if (output_design == nullptr || output_design->get_special_net_list() == nullptr) {
+    MJLOG.error(Loc::current(), "Cannot validate PG connections without top special nets.");
+    return false;
+  }
+  for (DFPGConnect& pg_connect : df_model.get_df_config().get_pg_connect_list()) {
+    if (output_design->get_special_net_list()->find_net(pg_connect.get_top_net_name()) == nullptr) {
+      MJLOG.error(Loc::current(), "Cannot find the top PG net: ", pg_connect.get_top_net_name());
       return false;
     }
   }
@@ -358,6 +798,12 @@ bool DefFlattener::validateDFSource(DFModel& df_model, std::string master_name)
       || df_source->get_die_area().get_height() != static_cast<int32_t>(output_master->get_height())) {
     MJLOG.error(Loc::current(), "Child DEF DIEAREA does not match the LEF master size: ", master_name);
     return false;
+  }
+  for (std::string& pin_name : df_source->get_pin_name_list()) {
+    if (output_master->findTerm(pin_name) == nullptr) {
+      MJLOG.error(Loc::current(), "Child DEF pin does not match the master: ", master_name, "/", pin_name);
+      return false;
+    }
   }
   return validateDFDesignData(df_model, child_design);
 }
@@ -458,28 +904,49 @@ bool DefFlattener::validateDFInstance(DFModel& df_model, idb::IdbDesign* source_
     idb::IdbSpecialNet* parent_special_net = getSpecialNet(source_design, parent_pin);
     idb::IdbNet* child_regular_net = child_pin->get_net();
     idb::IdbSpecialNet* child_special_net = getSpecialNet(child_source->get_design(), child_pin);
-    if (parent_regular_net != nullptr && parent_special_net != nullptr) {
-      MJLOG.error(Loc::current(), "A hierarchy instance pin is connected to both regular and special nets: ", source_instance->get_name());
-      return false;
+    if (parent_special_net != nullptr) {
+      parent_regular_net = nullptr;
     }
-    if (child_regular_net != nullptr && child_special_net != nullptr) {
-      MJLOG.error(Loc::current(), "A child boundary pin is connected to both regular and special nets: ", boundary_pin_name);
-      return false;
+    if (child_special_net != nullptr) {
+      child_regular_net = nullptr;
     }
-    if (parent_regular_net != nullptr && child_regular_net == nullptr) {
+    std::string parent_top_pg_net_name;
+    if (parent_regular_net != nullptr) {
+      parent_top_pg_net_name = df_model.get_df_config().get_top_pg_net_name(parent_regular_net->get_net_name());
+    }
+    std::string child_top_pg_net_name;
+    if (child_regular_net != nullptr) {
+      child_top_pg_net_name = df_model.get_df_config().get_top_pg_net_name(child_regular_net->get_net_name());
+    }
+    std::string parent_special_output_net_name;
+    if (parent_special_net != nullptr) {
+      parent_special_output_net_name = df_model.get_df_config().get_top_pg_net_name(parent_special_net->get_net_name());
+      if (parent_special_output_net_name.empty()) {
+        parent_special_output_net_name = parent_special_net->get_net_name();
+      }
+    }
+    idb::IdbSpecialNet* related_parent_special_net = getRelatedSpecialNet(source_design, parent_regular_net);
+    if (parent_regular_net != nullptr && child_regular_net == nullptr && child_special_net == nullptr) {
       MJLOG.error(Loc::current(), "A regular parent net has no matching child regular net: ", boundary_pin_name);
       return false;
     }
-    if (parent_special_net != nullptr && child_special_net == nullptr) {
+    if (parent_special_net != nullptr && child_special_net == nullptr && child_top_pg_net_name.empty()) {
       MJLOG.error(Loc::current(), "A special parent net has no matching child special net: ", boundary_pin_name);
       return false;
     }
-    if (parent_regular_net != nullptr && child_special_net != nullptr) {
-      MJLOG.error(Loc::current(), "Regular and special hierarchy nets cannot be merged at pin: ", boundary_pin_name);
+    if (parent_regular_net != nullptr && child_special_net != nullptr && related_parent_special_net == nullptr
+        && parent_top_pg_net_name.empty()) {
+      MJLOG.error(Loc::current(), "A regular hierarchy net has no matching parent special net: ", boundary_pin_name);
       return false;
     }
-    if (parent_special_net != nullptr && child_regular_net != nullptr) {
+    if (parent_special_net != nullptr && child_regular_net != nullptr
+        && child_top_pg_net_name != parent_special_output_net_name) {
       MJLOG.error(Loc::current(), "Special and regular hierarchy nets cannot be merged at pin: ", boundary_pin_name);
+      return false;
+    }
+    if (parent_regular_net != nullptr && child_regular_net != nullptr && !parent_top_pg_net_name.empty()
+        && !child_top_pg_net_name.empty() && parent_top_pg_net_name != child_top_pg_net_name) {
+      MJLOG.error(Loc::current(), "PG hierarchy nets map to different top nets: ", boundary_pin_name);
       return false;
     }
   }
@@ -609,20 +1076,58 @@ bool DefFlattener::buildChildNetBinding(DFModel& df_model, idb::IdbDesign* outpu
     idb::IdbSpecialNet* parent_special_net = getSpecialNet(parent_design, parent_pin);
     idb::IdbNet* child_regular_net = child_pin->get_net();
     idb::IdbSpecialNet* child_special_net = getSpecialNet(child_design, child_pin);
+    if (parent_special_net != nullptr) {
+      parent_regular_net = nullptr;
+    }
+    if (child_special_net != nullptr) {
+      child_regular_net = nullptr;
+    }
+    idb::IdbSpecialNet* parent_pg_net = getOutputPGNet(df_model, output_design, parent_regular_net);
+    idb::IdbSpecialNet* child_pg_net = getOutputPGNet(df_model, output_design, child_regular_net);
+    idb::IdbSpecialNet* related_parent_special_net = getRelatedSpecialNet(parent_design, parent_regular_net);
 
-    if (parent_regular_net != nullptr) {
-      idb::IdbNet* output_regular_net = getOutputRegularNet(df_model, output_design, parent_regular_net, parent_hierarchy_name,
-                                                            parent_net_binding);
-      if (!bindChildRegularNet(df_model, output_design, child_net_binding, child_regular_net, output_regular_net->get_net_name())) {
-        MJLOG.error(Loc::current(), "A child regular net connects to incompatible parent nets: ", child_regular_net->get_net_name());
+    if (parent_regular_net != nullptr && child_special_net != nullptr) {
+      if (parent_pg_net != nullptr) {
+        if (!bindChildSpecialNet(df_model, output_design, child_net_binding, child_special_net, parent_pg_net->get_net_name())) {
+          MJLOG.error(Loc::current(), "A child special net connects to incompatible parent nets: ", child_special_net->get_net_name());
+          return false;
+        }
+      } else if (related_parent_special_net == nullptr) {
+        MJLOG.error(Loc::current(), "A regular hierarchy net has no matching parent special net: ", boundary_pin_name);
         return false;
+      } else {
+        idb::IdbSpecialNet* output_special_net
+            = getOutputSpecialNet(df_model, output_design, related_parent_special_net, parent_hierarchy_name, parent_net_binding);
+        if (!bindChildSpecialNet(df_model, output_design, child_net_binding, child_special_net, output_special_net->get_net_name())) {
+          MJLOG.error(Loc::current(), "A child special net connects to incompatible parent nets: ", child_special_net->get_net_name());
+          return false;
+        }
+      }
+    } else if (parent_regular_net != nullptr) {
+      if (parent_pg_net != nullptr && child_pg_net != nullptr) {
+        if (parent_pg_net->get_net_name() != child_pg_net->get_net_name()) {
+          MJLOG.error(Loc::current(), "PG hierarchy nets map to different top nets: ", boundary_pin_name);
+          return false;
+        }
+      } else {
+        idb::IdbNet* output_regular_net = getOutputRegularNet(df_model, output_design, parent_regular_net, parent_hierarchy_name,
+                                                              parent_net_binding);
+        if (!bindChildRegularNet(df_model, output_design, child_net_binding, child_regular_net, output_regular_net->get_net_name())) {
+          MJLOG.error(Loc::current(), "A child regular net connects to incompatible parent nets: ", child_regular_net->get_net_name());
+          return false;
+        }
       }
     }
     if (parent_special_net != nullptr) {
       idb::IdbSpecialNet* output_special_net = getOutputSpecialNet(df_model, output_design, parent_special_net,
                                                                     parent_hierarchy_name, parent_net_binding);
-      if (!bindChildSpecialNet(df_model, output_design, child_net_binding, child_special_net, output_special_net->get_net_name())) {
+      if (child_special_net != nullptr
+          && !bindChildSpecialNet(df_model, output_design, child_net_binding, child_special_net, output_special_net->get_net_name())) {
         MJLOG.error(Loc::current(), "A child special net connects to incompatible parent nets: ", child_special_net->get_net_name());
+        return false;
+      }
+      if (child_special_net == nullptr && (child_pg_net == nullptr || child_pg_net->get_net_name() != output_special_net->get_net_name())) {
+        MJLOG.error(Loc::current(), "Special and regular hierarchy nets cannot be merged at pin: ", boundary_pin_name);
         return false;
       }
     }
@@ -649,11 +1154,28 @@ bool DefFlattener::bindChildSpecialNet(DFModel& df_model, idb::IdbDesign* output
   if (child_net == nullptr) {
     return false;
   }
+  std::string top_pg_net_name = df_model.get_df_config().get_top_pg_net_name(child_net->get_net_name());
+  if (!top_pg_net_name.empty() && top_pg_net_name != output_net_name) {
+    MJLOG.error(Loc::current(), "The child PG net conflicts with its top PG net: ", child_net->get_net_name());
+    return false;
+  }
   std::string child_output_net_name = child_net_binding.get_special_net_name(child_net);
   if (child_output_net_name.empty()) {
     return child_net_binding.set_special_net_name(child_net, output_net_name);
   }
   return mergeOutputSpecialNet(df_model, output_design, child_output_net_name, output_net_name);
+}
+
+idb::IdbSpecialNet* DefFlattener::getOutputPGNet(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbNet* source_net)
+{
+  if (source_net == nullptr) {
+    return nullptr;
+  }
+  std::string top_pg_net_name = df_model.get_df_config().get_top_pg_net_name(source_net->get_net_name());
+  if (top_pg_net_name.empty()) {
+    return nullptr;
+  }
+  return output_design->get_special_net_list()->find_net(top_pg_net_name);
 }
 
 void DefFlattener::flattenDesign(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbDesign* source_design,
@@ -719,8 +1241,9 @@ bool DefFlattener::mergeOutputSpecialNet(DFModel& df_model, idb::IdbDesign* outp
   std::vector<idb::IdbPin*> source_pin_list = source_net->get_io_pin_list()->get_pin_list();
   std::vector<idb::IdbPin*> source_instance_pin_list = source_net->get_instance_pin_list()->get_pin_list();
   source_pin_list.insert(source_pin_list.end(), source_instance_pin_list.begin(), source_instance_pin_list.end());
-  for (idb::IdbPin* source_pin : source_pin_list) {
-    output_design->connectPinToSpecialNet(source_pin, target_net);
+  if (!output_design->connectPinsToSpecialNet(source_pin_list, target_net)) {
+    MJLOG.error(Loc::current(), "Cannot connect merged hierarchy special net pins: ", target_root_name);
+    return false;
   }
   for (std::string& source_pin_name : source_net->get_pin_string_list()) {
     target_net->add_wildcard_instance_pin(source_pin_name);
@@ -819,6 +1342,13 @@ void DefFlattener::copyRegularNetWireList(DFModel& df_model, idb::IdbDesign* out
     if (source_net == nullptr) {
       continue;
     }
+    idb::IdbSpecialNet* output_pg_net = getOutputPGNet(df_model, output_design, source_net);
+    if (output_pg_net != nullptr) {
+      for (idb::IdbRegularWire* source_wire : source_net->get_wire_list()->get_wire_list()) {
+        copyRegularWire(output_design, output_pg_net, source_wire, transform);
+      }
+      continue;
+    }
     idb::IdbNet* output_net = getOutputRegularNet(df_model, output_design, source_net, hierarchy_name, net_binding);
     for (idb::IdbRegularWire* source_wire : source_net->get_wire_list()->get_wire_list()) {
       copyRegularWire(output_design, output_net, source_wire, transform);
@@ -834,6 +1364,18 @@ void DefFlattener::copyRegularWire(idb::IdbDesign* output_design, idb::IdbNet* o
   output_wire->set_shield_name(source_wire->get_shiled_name());
   for (idb::IdbRegularWireSegment* source_segment : source_wire->get_segment_list()) {
     idb::IdbRegularWireSegment* output_segment = output_wire->add_segment();
+    copyRegularWireSegment(output_design, output_segment, source_segment, transform);
+  }
+}
+
+void DefFlattener::copyRegularWire(idb::IdbDesign* output_design, idb::IdbSpecialNet* output_net,
+                                   idb::IdbRegularWire* source_wire, DFTransform transform)
+{
+  idb::IdbSpecialWire* output_wire = output_net->get_wire_list()->add_wire();
+  output_wire->set_wire_state(source_wire->get_wire_statement());
+  output_wire->set_shield_name(source_wire->get_shiled_name());
+  for (idb::IdbRegularWireSegment* source_segment : source_wire->get_segment_list()) {
+    idb::IdbSpecialWireSegment* output_segment = output_wire->add_segment();
     copyRegularWireSegment(output_design, output_segment, source_segment, transform);
   }
 }
@@ -880,6 +1422,39 @@ void DefFlattener::copyRegularWireSegment(idb::IdbDesign* output_design, idb::Id
       output_via_copy->set_coordinate(output_coordinate.get_x(), output_coordinate.get_y());
     }
   }
+}
+
+void DefFlattener::copyRegularWireSegment(idb::IdbDesign* output_design, idb::IdbSpecialWireSegment* output_segment,
+                                          idb::IdbRegularWireSegment* source_segment, DFTransform transform)
+{
+  idb::IdbLayer* output_layer = output_design->get_layout()->get_layers()->find_layer(source_segment->get_layer()->get_name());
+  output_segment->set_layer(output_layer);
+  output_segment->set_layer_status(source_segment->is_new_layer());
+  output_segment->set_route_width(static_cast<idb::IdbLayerRouting*>(output_layer)->get_width());
+  for (idb::IdbCoordinate<int32_t>* source_point : source_segment->get_point_list()) {
+    idb::IdbCoordinate<int32_t> output_point = transform.get_transformed_coordinate(source_point->get_x(), source_point->get_y());
+    std::optional<int32_t> point_ext = source_segment->get_point_ext(source_point);
+    if (point_ext.has_value()) {
+      output_segment->add_flush_point(output_point.get_x(), output_point.get_y(), point_ext.value());
+    } else {
+      output_segment->add_point(output_point.get_x(), output_point.get_y());
+    }
+  }
+  if (source_segment->is_rect()) {
+    idb::IdbRect output_rect = transform.get_transformed_rect(source_segment->get_segment_rect());
+    output_segment->set_is_rect(true);
+    output_segment->set_delta_rect(output_rect.get_low_x(), output_rect.get_low_y(), output_rect.get_high_x(), output_rect.get_high_y());
+  }
+  if (source_segment->is_via() && !source_segment->get_via_list().empty()) {
+    output_segment->set_is_via(true);
+    idb::IdbVia* output_via = getOutputVia(output_design, source_segment->get_via_list().front());
+    idb::IdbVia* output_via_copy = output_segment->copy_via(output_via);
+    idb::IdbCoordinate<int32_t>* source_coordinate = source_segment->get_via_list().front()->get_coordinate();
+    idb::IdbCoordinate<int32_t> output_coordinate
+        = transform.get_transformed_coordinate(source_coordinate->get_x(), source_coordinate->get_y());
+    output_via_copy->set_coordinate(output_coordinate.get_x(), output_coordinate.get_y());
+  }
+  output_segment->set_bounding_box();
 }
 
 void DefFlattener::copySpecialNetWireList(DFModel& df_model, idb::IdbDesign* output_design, idb::IdbDesign* source_design,
@@ -950,15 +1525,18 @@ void DefFlattener::copyBoundaryPinGeometry(DFModel& df_model, idb::IdbDesign* ou
     if (source_pin == nullptr) {
       continue;
     }
-    if (source_pin->get_net() != nullptr) {
-      idb::IdbNet* output_net = getOutputRegularNet(df_model, output_design, source_pin->get_net(), hierarchy_name, net_binding);
-      copyBoundaryPinShape(output_design, source_pin, output_net, transform);
-      copyBoundaryPinVia(output_design, source_pin, output_net, transform);
-    }
     idb::IdbSpecialNet* source_special_net = getSpecialNet(source_design, source_pin);
+    idb::IdbSpecialNet* output_pg_net = getOutputPGNet(df_model, output_design, source_pin->get_net());
     if (source_special_net != nullptr) {
       idb::IdbSpecialNet* output_net
           = getOutputSpecialNet(df_model, output_design, source_special_net, hierarchy_name, net_binding);
+      copyBoundaryPinShape(output_design, source_pin, output_net, transform);
+      copyBoundaryPinVia(output_design, source_pin, output_net, transform);
+    } else if (output_pg_net != nullptr) {
+      copyBoundaryPinShape(output_design, source_pin, output_pg_net, transform);
+      copyBoundaryPinVia(output_design, source_pin, output_pg_net, transform);
+    } else if (source_pin->get_net() != nullptr) {
+      idb::IdbNet* output_net = getOutputRegularNet(df_model, output_design, source_pin->get_net(), hierarchy_name, net_binding);
       copyBoundaryPinShape(output_design, source_pin, output_net, transform);
       copyBoundaryPinVia(output_design, source_pin, output_net, transform);
     }
@@ -1086,15 +1664,17 @@ void DefFlattener::copyLeafInstance(DFModel& df_model, idb::IdbDesign* output_de
     if (output_pin == nullptr) {
       output_pin = output_instance->get_pin(source_pin->get_pin_name());
     }
-    if (source_pin->get_net() != nullptr) {
-      idb::IdbNet* output_net = getOutputRegularNet(df_model, output_design, source_pin->get_net(), hierarchy_name, net_binding);
-      output_design->connectPinToNet(output_pin, output_net);
-    }
     idb::IdbSpecialNet* source_special_net = getSpecialNet(nullptr, source_pin);
+    idb::IdbSpecialNet* output_pg_net = getOutputPGNet(df_model, output_design, source_pin->get_net());
     if (source_special_net != nullptr) {
       idb::IdbSpecialNet* output_net
           = getOutputSpecialNet(df_model, output_design, source_special_net, hierarchy_name, net_binding);
-      output_design->connectPinToSpecialNet(output_pin, output_net);
+      df_model.add_special_net_pin(output_net->get_net_name(), output_pin);
+    } else if (output_pg_net != nullptr) {
+      df_model.add_special_net_pin(output_pg_net->get_net_name(), output_pin);
+    } else if (source_pin->get_net() != nullptr) {
+      idb::IdbNet* output_net = getOutputRegularNet(df_model, output_design, source_pin->get_net(), hierarchy_name, net_binding);
+      output_design->connectPinToNet(output_pin, output_net);
     }
   }
 
@@ -1131,7 +1711,10 @@ idb::IdbSpecialNet* DefFlattener::getOutputSpecialNet(DFModel& df_model, idb::Id
 {
   std::string output_net_name = net_binding.get_special_net_name(source_net);
   if (output_net_name.empty()) {
-    output_net_name = getHierarchyName(hierarchy_name, source_net->get_net_name());
+    output_net_name = df_model.get_df_config().get_top_pg_net_name(source_net->get_net_name());
+    if (output_net_name.empty()) {
+      output_net_name = getHierarchyName(hierarchy_name, source_net->get_net_name());
+    }
     net_binding.set_special_net_name(source_net, output_net_name);
   }
   output_net_name = df_model.get_special_net_union().get_root_name(output_net_name);
@@ -1147,6 +1730,14 @@ idb::IdbSpecialNet* DefFlattener::getSpecialNet(idb::IdbDesign* design, idb::Idb
     return pin->get_special_net();
   }
   return design == nullptr ? nullptr : design->findSpecialNetForInstancePin(pin);
+}
+
+idb::IdbSpecialNet* DefFlattener::getRelatedSpecialNet(idb::IdbDesign* design, idb::IdbNet* regular_net)
+{
+  if (design == nullptr || regular_net == nullptr || design->get_special_net_list() == nullptr) {
+    return nullptr;
+  }
+  return design->get_special_net_list()->find_net(regular_net->get_net_name());
 }
 
 idb::IdbVia* DefFlattener::getOutputVia(idb::IdbDesign* output_design, idb::IdbVia* source_via)

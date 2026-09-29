@@ -19,6 +19,7 @@
 #include "DFHierarchy.hpp"
 #include "DFNetUnion.hpp"
 #include "DFSource.hpp"
+#include "IdbPins.h"
 
 namespace imj {
 
@@ -37,6 +38,10 @@ class DFModel
   std::map<std::string, DFSource>& get_child_master_to_df_source_map() { return _child_master_to_df_source_map; }
   DFNetUnion& get_regular_net_union() { return _regular_net_union; }
   DFNetUnion& get_special_net_union() { return _special_net_union; }
+  std::map<std::string, std::vector<idb::IdbPin*>>& get_special_net_name_to_pin_list_map()
+  {
+    return _special_net_name_to_pin_list_map;
+  }
   DFSource* get_df_source(const std::string& master_name)
   {
     std::map<std::string, DFSource>::iterator iter = _child_master_to_df_source_map.find(master_name);
@@ -49,6 +54,10 @@ class DFModel
   // setter
   void set_df_config(const DFConfig& df_config) { _df_config = df_config; }
   // function
+  void add_special_net_pin(std::string special_net_name, idb::IdbPin* pin)
+  {
+    _special_net_name_to_pin_list_map[special_net_name].push_back(pin);
+  }
 
  private:
   DFConfig _df_config;
@@ -56,6 +65,7 @@ class DFModel
   std::map<std::string, DFSource> _child_master_to_df_source_map;
   DFNetUnion _regular_net_union;
   DFNetUnion _special_net_union;
+  std::map<std::string, std::vector<idb::IdbPin*>> _special_net_name_to_pin_list_map;
 };
 
 }  // namespace imj
