@@ -19,7 +19,6 @@
 
 #include "idm.h"
 #include "report_manager.h"
-#include "view_json_io.h"
 namespace tcl {
 
 CmdInitIdb::CmdInitIdb(const char* cmd_name) : TclCmd(cmd_name)
@@ -563,9 +562,6 @@ CmdSaveGDS::CmdSaveGDS(const char* cmd_name) : TclCmd(cmd_name)
   auto* path = new TclStringOption(TCL_PATH, 1);
   addOption(path);
 
-  auto* harden_option = new TclSwitchOption("-harden");
-  addOption(harden_option);
-
   auto* layer_map_option = new TclStringOption("-layer_map", 1, nullptr);
   addOption(layer_map_option);
 }
@@ -577,9 +573,6 @@ unsigned CmdSaveGDS::check()
 
   TclOption* path = getOptionOrArg(TCL_PATH);
   ecc::checkTclOption(path, TCL_PATH);
-
-  TclOption* harden_option = getOptionOrArg("-harden");
-  ecc::checkTclOption(harden_option, "-harden");
 
   TclOption* layer_map_option = getOptionOrArg("-layer_map");
   ecc::checkTclOption(layer_map_option, "-layer_map");
@@ -601,15 +594,10 @@ unsigned CmdSaveGDS::exec()
 
   TclOption* def_path = getOptionOrArg(TCL_PATH);
   auto str_path = def_path->getStringVal();
-  TclOption* harden_option = getOptionOrArg("-harden");
-  bool is_harden = false;
-  if (harden_option->is_set_val()) {
-    is_harden = true;
-  }
   if (str_path != nullptr) {
     TclOption* layer_map_option = getOptionOrArg("-layer_map");
     const char* layer_map_path = layer_map_option == nullptr ? nullptr : layer_map_option->getStringVal();
-    if (!dmInst->saveGDSII(str_path, is_harden, layer_map_path == nullptr ? "" : layer_map_path)) {
+    if (!dmInst->saveGDSII(str_path, layer_map_path == nullptr ? "" : layer_map_path)) {
       return 0;
     }
     return 1;
@@ -663,98 +651,6 @@ unsigned CmdSaveJSON::exec()
   }
 
   return 1;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-CmdSaveViewJson::CmdSaveViewJson(const char* cmd_name) : TclCmd(cmd_name)
-{
-  auto* path = new TclStringOption(TCL_PATH, 1);
-  addOption(path);
-
-  auto* json_format = new TclStringOption("-json_format", 1, "pretty");
-  addOption(json_format);
-
-  auto* compress = new TclIntOption("-compress", 1, 0);
-  addOption(compress);
-}
-
-unsigned CmdSaveViewJson::check()
-{
-  TclOption* path = getOptionOrArg(TCL_PATH);
-  ecc::checkTclOption(path, TCL_PATH);
-  TclOption* json_format = getOptionOrArg("-json_format");
-  ecc::checkTclOption(json_format, "-json_format");
-  TclOption* compress = getOptionOrArg("-compress");
-  ecc::checkTclOption(compress, "-compress");
-  return 1;
-}
-
-unsigned CmdSaveViewJson::exec()
-{
-  if (!check()) {
-    return 0;
-  }
-
-  TclOption* path = getOptionOrArg(TCL_PATH);
-  auto* str_path = path->getStringVal();
-  if (str_path == nullptr) {
-    return 0;
-  }
-
-  TclOption* json_format_option = getOptionOrArg("-json_format");
-  const char* json_format_value = json_format_option == nullptr ? "pretty" : json_format_option->getStringVal();
-  idb::ViewJsonWriteOptions options;
-  if (!idb::parseViewJsonFormat(json_format_value == nullptr ? "pretty" : json_format_value, options.format)) {
-    ECCLOG.warn(ecc::Loc::current(), "Save view json failed: unsupported -json_format `", json_format_value, "`, expected `pretty` or `compact`.");
-    return 0;
-  }
-
-  TclOption* compress_option = getOptionOrArg("-compress");
-  options.compress = compress_option != nullptr && compress_option->getIntVal() != 0;
-
-  return dmInst->saveViewJson(str_path, options) ? 1 : 0;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-CmdApplyViewJsonEdits::CmdApplyViewJsonEdits(const char* cmd_name) : TclCmd(cmd_name)
-{
-  auto* path = new TclStringOption(TCL_PATH, 1);
-  addOption(path);
-
-  auto* compress = new TclIntOption("-compress", 1, 0);
-  addOption(compress);
-}
-
-unsigned CmdApplyViewJsonEdits::check()
-{
-  TclOption* path = getOptionOrArg(TCL_PATH);
-  ecc::checkTclOption(path, TCL_PATH);
-  TclOption* compress = getOptionOrArg("-compress");
-  ecc::checkTclOption(compress, "-compress");
-  return 1;
-}
-
-unsigned CmdApplyViewJsonEdits::exec()
-{
-  if (!check()) {
-    return 0;
-  }
-
-  TclOption* path = getOptionOrArg(TCL_PATH);
-  auto* str_path = path->getStringVal();
-  if (str_path == nullptr) {
-    return 0;
-  }
-
-  TclOption* compress_option = getOptionOrArg("-compress");
-  const bool compress = compress_option != nullptr && compress_option->getIntVal() != 0;
-  return dmInst->applyViewJsonEdits(str_path, compress) ? 1 : 0;
 }
 
 CmdWriteAbstractLef::CmdWriteAbstractLef(const char* cmd_name) : TclCmd(cmd_name)

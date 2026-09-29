@@ -164,8 +164,8 @@ auto appendTimingNode(idb::IdbPin* pin, idb::LibCell* lib_cell, WrapperTimingGra
     node.output = lib_port->isOutput() != 0U;
     if (node.input) {
       auto* owner_lib = lib_cell->get_owner_lib();
-      for (const auto [analysis_index, analysis] : {std::pair{0U, idb::AnalysisMode::kMin}, std::pair{1U, idb::AnalysisMode::kMax}}) {
-        for (const auto [transition_index, transition] : {std::pair{0U, idb::TransType::kRise}, std::pair{1U, idb::TransType::kFall}}) {
+      for (const auto& [analysis_index, analysis] : {std::pair{0U, idb::AnalysisMode::kMin}, std::pair{1U, idb::AnalysisMode::kMax}}) {
+        for (const auto& [transition_index, transition] : {std::pair{0U, idb::TransType::kRise}, std::pair{1U, idb::TransType::kFall}}) {
           auto cap = lib_port->get_port_cap(analysis, transition);
           if (!cap.has_value() && lib_port->has_port_cap()) {
             cap = lib_port->get_port_cap();

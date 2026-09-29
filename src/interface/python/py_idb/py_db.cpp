@@ -24,7 +24,6 @@
 #include "IdbSpecialNet.h"
 #include "feature_manager.h"
 #include <idm.h>
-#include "view_json_io.h"
 
 #include <optional>
 #include <utility>
@@ -180,9 +179,9 @@ bool saveNetList(const std::string& netlist_path, std::set<std::string> exclude_
   return true;
 }
 
-bool saveGDSII(const std::string& gds_name, const std::string& layer_map_path, bool is_hardened /* = false */)
+bool saveGDSII(const std::string& gds_name, const std::string& layer_map_path)
 {
-  return dmInst->saveGDSII(gds_name, is_hardened, layer_map_path);
+  return dmInst->saveGDSII(gds_name, layer_map_path);
 }
 
 bool saveJson(const std::string& path)
@@ -190,17 +189,6 @@ bool saveJson(const std::string& path)
   std::string options = "";
 
   return dmInst->saveJSON(path, options);
-}
-
-bool saveViewJson(const std::string& output_dir, const std::string& json_format, bool compress)
-{
-  idb::ViewJsonWriteOptions options;
-  if (!idb::parseViewJsonFormat(json_format, options.format)) {
-    ECCLOG.warn(ecc::Loc::current(), "Save view json failed: unsupported json_format `", json_format, "`, expected `pretty` or `compact`.");
-    return false;
-  }
-  options.compress = compress;
-  return dmInst->saveViewJson(output_dir, options);
 }
 
 bool saveGeometrySnapshot(const std::string& output_dir, bool include_drc)
@@ -311,11 +299,6 @@ bool resetGeometrySession()
 {
   geometry_edit_session().reset();
   return true;
-}
-
-bool applyViewJsonEdits(const std::string& edits_path, bool compress)
-{
-  return dmInst->applyViewJsonEdits(edits_path, compress);
 }
 
 bool saveData(const std::string& path)
