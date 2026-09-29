@@ -44,6 +44,7 @@ enum class ClockTracePropagationKind
 {
   kBuffer,
   kInverter,
+  kClockGate,
 };
 
 struct ClockTracePropagationStep

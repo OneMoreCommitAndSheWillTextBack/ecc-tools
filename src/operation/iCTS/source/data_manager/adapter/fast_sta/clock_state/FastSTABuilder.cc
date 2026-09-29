@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -81,13 +82,24 @@ auto collectPropagationBufferModelsAndNetLimits(const FastStaEnvironment& enviro
 {
   auto& wrapper = *environment.wrapper;
   std::unordered_set<std::string> loaded_buffer_models;
+  std::unordered_map<std::string, std::pair<std::string, std::string>> gate_ports_by_inst;
+  for (const auto* clock : clocks) {
+    for (const auto& arc : clock->get_propagation_arcs()) {
+      if (arc.kind == ClockPropagationKind::kClockGate && arc.inst != nullptr && arc.input_pin != nullptr && arc.output_pin != nullptr) {
+        gate_ports_by_inst.emplace(arc.inst->get_name(), std::pair{arc.input_pin->get_name(), arc.output_pin->get_name()});
+      }
+    }
+  }
   for (auto& node : context.nodes) {
     // Sink pin capacitance and slew are mandatory but are resolved independently by collectSinkPinCaps. Only propagation buffers drive DMP timing and power.
     if (!RequiresPropagationBufferModel(node) || node.cell_master.empty()) {
       continue;
     }
     if (!loaded_buffer_models.contains(node.cell_master)) {
-      const auto model = FastStaLiberty::extractBufferCell(wrapper, node.cell_master);
+      const auto gate_ports = gate_ports_by_inst.find(node.inst_name);
+      const auto model = gate_ports == gate_ports_by_inst.end()
+                             ? FastStaLiberty::extractBufferCell(wrapper, node.cell_master)
+                             : FastStaLiberty::extractCellArc(wrapper, node.cell_master, gate_ports->second.first, gate_ports->second.second);
       if (!model.has_value()) {
         failure_reason = "liberty_cell_unavailable:" + node.cell_master;
         return false;
@@ -123,7 +135,7 @@ auto collectPropagationBufferModelsAndNetLimits(const FastStaEnvironment& enviro
       }
       node.port_name = liberty_cell.output_port;
       node.output = true;
-      if (liberty_cell.timing_arc.positive_unate != liberty_cell.timing_arc.negative_unate) {
+      if (!liberty_cell.clock_gate.has_value() && liberty_cell.timing_arc.positive_unate != liberty_cell.timing_arc.negative_unate) {
         node.logic_function = (liberty_cell.timing_arc.negative_unate ? "!" : "") + liberty_cell.input_port;
       }
     }
