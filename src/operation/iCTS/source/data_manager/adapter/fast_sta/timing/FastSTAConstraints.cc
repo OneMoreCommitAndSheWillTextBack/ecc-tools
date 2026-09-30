@@ -493,11 +493,14 @@ auto FastStaConstraints::caseLookup(const FastStaContext& context, const std::st
 
 auto FastStaConstraints::gateActive(const FastStaContext& context, const std::string& inst_name, const FastStaClockGateModel& gate) -> FastStaLogicValue
 {
-  if (gate.latch_based && (gate.state.empty() || gate.data_expression.empty() || gate.latch_enable_expression.empty())) {
-    return FastStaLogicValue::kInvalid;
-  }
+  // A valid CK-to-ECK timing arc can be available even when Liberty omits the
+  // Boolean/latch activity model. Keep timing propagation conservative instead
+  // of rejecting a gate whose exact activity cannot be evaluated.
   if (gate.output_expression.empty() && !gate.clock_port.empty() && !gate.output_port.empty()) {
     return FastStaLogicValue::kUnknown;
+  }
+  if (gate.latch_based && (gate.state.empty() || gate.data_expression.empty() || gate.latch_enable_expression.empty())) {
+    return FastStaLogicValue::kInvalid;
   }
   return FastStaCondition::isSensitized(expandedGateFunction(gate), gate.clock_port, caseLookup(context, inst_name));
 }

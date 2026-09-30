@@ -107,7 +107,7 @@ TEST(FastSTATest, InvalidEnvironmentFailsClosedBeforeContextBuild)
   EXPECT_EQ(result.failure_reason, "fast_sta_environment_wrapper_unavailable");
 }
 
-TEST(FastSTATest, ClockGateWithoutOutputFunctionHasUnknownActivity)
+TEST(FastSTATest, ClockGateWithoutActivityModelHasUnknownActivity)
 {
   icts::FastStaContext context;
   icts::FastStaClockGateModel gate;
@@ -116,6 +116,8 @@ TEST(FastSTATest, ClockGateWithoutOutputFunctionHasUnknownActivity)
 
   EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kUnknown);
   gate.latch_based = true;
+  EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kUnknown);
+  gate.output_expression = "CK & E";
   EXPECT_EQ(icts::FastStaConstraints::gateActive(context, "u_gate", gate), icts::FastStaLogicValue::kInvalid);
   gate.state = "IQ";
   gate.data_expression = "E";
